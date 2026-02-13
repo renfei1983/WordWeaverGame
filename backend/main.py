@@ -49,9 +49,9 @@ app.add_middleware(
 # Note: User needs to set SILICONFLOW_API_KEY in .env
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 BASE_URL = "https://api.siliconflow.cn/v1"
-MODEL = "Qwen/Qwen2.5-72B-Instruct" # Switch to Qwen2.5 72B as requested
+MODEL = "deepseek-ai/DeepSeek-V3" # Switch to DeepSeek V3 (SiliconFlow/Pro) as requested
+# MODEL = "Qwen/Qwen2.5-72B-Instruct" # Previous
 # MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507" # Previous
-# MODEL = "Qwen/Qwen3-32B" # Previous
 # MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct" # Previous
 # MODEL = "Pro/deepseek-ai/DeepSeek-V3.2" # Previous
 # MODEL = "Qwen/Qwen2.5-72B-Instruct" # Switch to Qwen 2.5 72B (Faster & Stable)

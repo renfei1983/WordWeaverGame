@@ -70,10 +70,10 @@ const clearInterval = GameGlobal.clearInterval || window.clearInterval || functi
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
-const USE_STREAM = false // Disable streaming (DNS issues), fallback to Cloud Container
-// TODO: Replace with your Cloud Run Public Access URL for streaming
+const USE_STREAM = true // Enable streaming for Cloud Container
+// TODO: Replace with your Cloud Container Public Domain (ending in run.weixin.qq.com)
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.9'
+const BACKEND_VERSION = 'v1.6.0'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -279,9 +279,9 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
     // Force append stream=true
     finalPath += (finalPath.includes('?') ? '&' : '?') + 'stream=true'
 
-    // If streaming disabled or no URL, fallback immediately
-    if (!USE_STREAM || (USE_CLOUD && CLOUD_API_URL.includes('flask-service-r4324'))) {
-         console.log('Streaming disabled or invalid URL, using fallback API...')
+    // If streaming disabled, fallback immediately
+    if (!USE_STREAM) {
+         console.log('Streaming disabled, using fallback API...')
          callApi(path, method, data, (res) => {
             console.log('Fallback success', res)
             const jsonStr = JSON.stringify(res.data)
