@@ -364,14 +364,24 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
              return
         }
 
-        const ai = wx.cloud.extend.AI.createModel("hunyuan")
+        // Create model with specific name instead of generic "hunyuan"
+        // Try "hunyuan-lite" or "deepseek-r1" directly as model name if needed, 
+        // but based on docs "hunyuan" usually works if "model" param is passed in data.
+        // However, the error says "model hunyuan not found in definitions".
+        // This implies createModel("hunyuan") is failing or the internal mapping is wrong.
+        // Let's try createModel("hunyuan-lite") directly or "deepseek".
+        // Actually, let's use the most standard one.
+        const ai = wx.cloud.extend.AI.createModel("deepseek") 
+        // Or keep "hunyuan" but maybe the library version in devtools is old?
+        // Let's try "deepseek" as it was mentioned in search results as supported.
+        // Wait, the error is `model hunyuan not found`.
+        // Let's change to "deepseek" to see if it works, or "hunyuan-exp".
         
         ;(async () => {
             try {
-                // New 2026 Interface: Use callbacks (onText, onFinish)
                 await ai.streamText({
                     data: {
-                        model: "hunyuan-lite", // Explicitly specify model version as per new docs
+                        model: "deepseek-v3", // Try DeepSeek V3
                         messages: [
                             { role: "system", content: "You are a helpful assistant that outputs raw JSON without markdown formatting." },
                             { role: "user", content: prompt }
