@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
         project,
-        version: '1.4.0',
-        desc: 'Deployed via Trae IDE - Clean White Theme UI Update (v1.4.0)',
+        version: '1.5.0',
+        desc: 'Deployed via Trae IDE - DeepSeek V3.2 Streaming & UI Optimization (v1.5.0)',
         setting: {
         es6: true,
         minify: true,

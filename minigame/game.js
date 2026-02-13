@@ -35,13 +35,38 @@ if (wx.setInnerAudioOption) {
   })
 }
 
+// Helper for UTF-8 decoding
+function utf8Decode(uint8array) {
+  try {
+     return new TextDecoder("utf-8").decode(uint8array)
+  } catch(e) {
+     let out = "";
+     let i = 0;
+     while(i < uint8array.length) {
+       let c = uint8array[i++];
+       if (c >> 7 == 0) {
+         out += String.fromCharCode(c);
+       } else if ((c & 0xFC) == 0xC0) {
+         out += String.fromCharCode(((c & 0x1F) << 6) | (uint8array[i++] & 0x3F));
+       } else if ((c & 0xF0) == 0xE0) {
+         out += String.fromCharCode(((c & 0x0F) << 12) | ((uint8array[i++] & 0x3F) << 6) | (uint8array[i++] & 0x3F));
+       } else {
+         i += 3; 
+       }
+     }
+     return out;
+  }
+}
+
 const canvas = wx.createCanvas()
 const context = canvas.getContext('2d')
 
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
-const BACKEND_VERSION = 'v1.4.0'
+// TODO: Replace with your Cloud Run Public Access URL for streaming
+const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
+const BACKEND_VERSION = 'v1.5.0'
 
 // --- Constants ---
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -226,6 +251,56 @@ function callApi(path, method, data, success, fail) {
   }
 }
 
+function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
+    let finalPath = path
+    if (method === 'GET' && data) {
+        const params = []
+        Object.keys(data).forEach(key => {
+            const val = data[key]
+            if (Array.isArray(val)) {
+                val.forEach(v => params.push(`${key}=${encodeURIComponent(v)}`))
+            } else {
+                params.push(`${key}=${encodeURIComponent(val)}`)
+            }
+        })
+        if (params.length > 0) {
+            finalPath += (finalPath.includes('?') ? '&' : '?') + params.join('&')
+        }
+    }
+
+    // Force append stream=true
+    finalPath += (finalPath.includes('?') ? '&' : '?') + 'stream=true'
+
+    const url = USE_CLOUD 
+        ? `${CLOUD_API_URL}${finalPath}` 
+        : `http://localhost:8000${finalPath}`
+
+    console.log('Starting Stream Request:', url)
+    const requestTask = wx.request({
+        url: url,
+        method: method,
+        enableChunked: true,
+        header: {
+            'content-type': 'application/json'
+        },
+        success: (res) => {
+            console.log('Stream request finished', res)
+            if (onSuccess) onSuccess() 
+        },
+        fail: (err) => {
+            console.error('Stream request failed', err)
+            if (onFail) onFail(err)
+        }
+    })
+
+    requestTask.onChunkReceived((res) => {
+        const arrayBuffer = res.data
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const text = utf8Decode(uint8Array)
+        if (onChunk) onChunk(text)
+    })
+}
+
 function login() {
   wx.showLoading({ title: '登录中...' })
   wx.login({
@@ -295,7 +370,7 @@ function fetchLeaderboard() {
 
 // --- Game Logic ---
 
-let storyBuffer = []
+let storyBuffer = [] // Cache for pre-generated stories
 let isPrefetching = false
 
 function pickRandomWords(count = 5) {
@@ -304,26 +379,60 @@ function pickRandomWords(count = 5) {
   return shuffled.slice(0, count)
 }
 
-function prefetchStory() {
+function prefetchStory(onProgress) {
     if (storyBuffer.length >= 3 || isPrefetching) return
 
     isPrefetching = true
     const words = pickRandomWords(5)
     
-    console.log('Prefetching story...')
-    callApi('/generate_story', 'GET', {
+    // Capture current settings to verify consistency later
+    const requestedTopic = selectedTopic
+    const requestedLevel = selectedLevel
+
+    console.log('Prefetching story (Stream)...', requestedTopic, requestedLevel)
+    
+    let accumulatedJSON = ""
+    
+    callApiStream('/generate_story', 'GET', {
         words: words,
-        topic: selectedTopic,
-        level: selectedLevel
-    }, (res) => {
-        if (res.data && !res.data.error) {
-            storyBuffer.push(res.data)
-            console.log('Story buffered. Current buffer size:', storyBuffer.length)
+        topic: requestedTopic,
+        level: requestedLevel
+    }, (chunk) => {
+        // onChunk
+        accumulatedJSON += chunk
+        if (onProgress) onProgress() 
+    }, () => {
+        // onSuccess
+        // Consistency check: discard if settings changed during fetch
+        if (selectedTopic !== requestedTopic || selectedLevel !== requestedLevel) {
+            console.log('Discarding prefetched story due to settings change')
+            isPrefetching = false
+            // Retry with new settings if buffer low
+            if (storyBuffer.length < 3) {
+                 prefetchStory(onProgress)
+            }
+            return
         }
+
+        try {
+            const data = JSON.parse(accumulatedJSON)
+            if (data && !data.error) {
+                storyBuffer.push(data)
+                console.log('Story buffered. Current buffer size:', storyBuffer.length)
+                
+                // If waiting for this story, start game
+                if (gameState === 'GENERATING' && storyBuffer.length > 0) {
+                     startNewGame()
+                }
+            }
+        } catch (e) {
+            console.error('JSON Parse Error', e)
+        }
+
         isPrefetching = false
         // Recursively fill buffer if needed
         if (storyBuffer.length < 3) {
-            prefetchStory()
+            prefetchStory() // No callback for background fill
         }
     }, (err) => {
         console.error('Prefetch Error', err)
@@ -331,67 +440,43 @@ function prefetchStory() {
     })
 }
 
+let loadingDots = 0
+function drawGenerating(w, h) {
+    // Draw simple loading animation
+    context.fillStyle = Theme.textMain
+    context.font = '20px sans-serif'
+    context.textAlign = 'center'
+    
+    // Update dots
+    loadingDots = (loadingDots + 1) % 40
+    const dots = '.'.repeat(Math.floor(loadingDots / 10) + 1)
+    
+    context.fillText('正在生成题目' + dots, w/2, h/2)
+    context.fillStyle = Theme.textSub
+    context.font = '14px sans-serif'
+    context.fillText('DeepSeek 正在思考中...', w/2, h/2 + 30)
+}
+
 function startNewGame() {
-    // Check buffer first
     if (storyBuffer.length > 0) {
+        // Use buffered story
         const data = storyBuffer.shift()
         useStoryData(data)
-        // Trigger prefetch to refill
+        // Trigger background prefetch to refill
         prefetchStory()
-        return
-    }
-
-    // If buffer empty, show countdown and fetch batch
-    gameState = 'COUNTDOWN'
-    countdownValue = 60
-    storyBuffer = [] // Reset
-    
-    // Start countdown timer
-    if (countdownInterval) clearInterval(countdownInterval)
-    countdownInterval = setInterval(() => {
-        countdownValue--
-        if (countdownValue <= 0) {
-            clearInterval(countdownInterval)
-            if (storyBuffer.length > 0) {
-                 const data = storyBuffer.shift()
-                 useStoryData(data)
-                 prefetchStory()
-            } else {
-                // Timeout but no data?
-                gameState = 'ERROR'
-                storyData = { error: '生成超时，请重试' }
-                draw()
-            }
-        } else {
-            // Check if we have data early?
-            // User said "show 1min countdown", implying we should wait? 
-            // Usually users want to play as soon as ready. 
-            // But let's respect "show 1min countdown" as a loading phase max time or strict time?
-            // "Show 1min countdown... ensure 3 sets available"
-            // Let's allow early exit if we have enough buffer (e.g. 1 or 3?)
-            // If we wait for full 3, it might take long. 
-            // Let's enter game as soon as 1 is ready BUT keep fetching?
-            // Re-reading: "Show 1min countdown, ds generates three sets."
-            // This sounds like a forced preparation phase.
-            // Let's wait until we have at least 1, but maybe try to get 3?
-            // If I have 1, I can let user play.
-            if (storyBuffer.length >= 1) {
-                clearInterval(countdownInterval)
-                const data = storyBuffer.shift()
-                useStoryData(data)
-                prefetchStory()
-            }
+    } else {
+        // No buffer, must wait
+        gameState = 'GENERATING'
+        currentScene = 'game' // Ensure we are on game scene
+        // Start prefetch with progress updates
+        prefetchStory(() => {
+            // onProgress: trigger redraw to animate dots
             draw()
-        }
-    }, 1000)
-
-    // Trigger batch fetch (3 times)
-    prefetchStory()
-    setTimeout(prefetchStory, 2000) // Stagger slightly
-    setTimeout(prefetchStory, 4000)
-    
-    draw()
+        })
+        draw()
+    }
 }
+
 
 function useStoryData(data) {
     storyData = data
@@ -753,7 +838,12 @@ function drawSelectionCard(w) {
         const btnTxt = isSelected ? Theme.primaryTxt : Theme.secondaryTxt
         
         drawButton(lx, ly, cellW, cellH, btnBg, level, '', true, () => {
-            selectedLevel = level
+            if (selectedLevel !== level) {
+                selectedLevel = level
+                // Reset buffer on level change
+                storyBuffer = []
+                isPrefetching = false
+            }
             draw()
         }, btnTxt, 14, false, contentTop + scrollOffset + ly)
     })
@@ -783,7 +873,12 @@ function drawSelectionCard(w) {
         const btnTxt = isSelected ? Theme.primaryTxt : Theme.secondaryTxt
         
         drawButton(tx, ty, cellW, cellH, btnBg, topic, '', true, () => {
-            selectedTopic = topic
+            if (selectedTopic !== topic) {
+                selectedTopic = topic
+                // Reset buffer on topic change
+                storyBuffer = []
+                isPrefetching = false
+            }
             draw()
         }, btnTxt, 14, false, contentTop + scrollOffset + ty)
     })
@@ -933,8 +1028,7 @@ function drawLeaderboardCard(w) {
     return y + totalH + 20
 }
 
-let countdownValue = 60
-let countdownInterval = null
+
 
 function drawGameScene(w, h) {
   const headerY = safeAreaTop
@@ -1004,8 +1098,8 @@ function drawGameScene(w, h) {
   context.translate(0, contentY + scrollOffset)
   
   let drawnHeight = 0
-  if (gameState === 'COUNTDOWN') {
-    drawCountdown(w, availableH)
+  if (gameState === 'GENERATING') {
+    drawGenerating(w, availableH)
     drawnHeight = availableH
   } else if (gameState === 'ERROR') {
     drawError(w, availableH)
@@ -1086,44 +1180,7 @@ function drawLoading(w, h) {
   context.fillText('AI 魔法施展中...', w / 2, h / 2 + 10)
 }
 
-function drawCountdown(w, h) {
-    // Background circle
-    const cx = w / 2
-    const cy = h / 2
-    const r = 80
 
-    context.beginPath()
-    context.arc(cx, cy, r, 0, 2 * Math.PI)
-    context.fillStyle = Theme.surface
-    context.fill()
-    context.lineWidth = 10
-    context.strokeStyle = Theme.border
-    context.stroke()
-
-    // Progress arc
-    const startAngle = -0.5 * Math.PI
-    const progress = countdownValue / 60
-    const endAngle = startAngle + (2 * Math.PI * progress)
-    
-    context.beginPath()
-    context.arc(cx, cy, r, startAngle, endAngle)
-    context.lineWidth = 10
-    context.strokeStyle = Theme.primary
-    context.lineCap = 'round'
-    context.stroke()
-
-    // Text
-    context.fillStyle = Theme.textMain
-    context.font = 'bold 40px sans-serif'
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillText(countdownValue.toString(), cx, cy)
-
-    context.fillStyle = Theme.textSub
-    context.font = '16px sans-serif'
-    context.fillText('正在准备题目...', cx, cy + r + 40)
-    context.fillText(`已缓存: ${storyBuffer.length}/3 组`, cx, cy + r + 70)
-}
 
 function drawError(w, h) {
   const msg = storyData ? storyData.error : 'Error'

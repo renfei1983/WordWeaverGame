@@ -49,7 +49,8 @@ app.add_middleware(
 # Note: User needs to set SILICONFLOW_API_KEY in .env
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 BASE_URL = "https://api.siliconflow.cn/v1"
-MODEL = "deepseek-ai/DeepSeek-V3" # Switch back to DeepSeek V3 per user request
+MODEL = "Pro/deepseek-ai/DeepSeek-V3.2" # Updated to Pro V3.2 per user request
+# MODEL = "deepseek-ai/DeepSeek-V3" # Fallback
 # MODEL = "Qwen/Qwen2.5-72B-Instruct" # Switch to Qwen 2.5 72B (Faster & Stable)
 # MODEL = "Qwen/Qwen2.5-7B-Instruct" # Ultra-fast fallback if 72B is still slow
 
@@ -165,86 +166,43 @@ async def login(
 
 
 @app.get("/generate_story")
-def generate_story(
-    topic: str,
-    level: Literal["KET", "PET", "Junior High", "Senior High", "Postgraduate"] = "Junior High",
-    words: List[str] = Query(..., description="List of words to include")
+async def generate_story(
+    words: List[str] = Query(None),
+    topic: str = "Daily Life",
+    level: str = "Junior High",
+    stream: bool = False
 ):
-    request_id = datetime.now().strftime("%H%M%S")
-    logger.info(f"[{request_id}] Generate Story Request: topic='{topic}', level='{level}', words={words}")
+    request_id = f"req_{int(time.time()*1000)}"
+    logger.info(f"[{request_id}] Generating story for topic='{topic}', level='{level}', stream={stream}")
     
-    if not SILICONFLOW_API_KEY:
-        logger.error(f"[{request_id}] SILICONFLOW_API_KEY is missing")
-        raise HTTPException(status_code=500, detail="SILICONFLOW_API_KEY not set in environment variables.")
+    if not words:
+        # If no words provided, pick random ones (simple fallback logic or error)
+        # For now, we expect words to be passed. If not, error.
+        raise HTTPException(status_code=400, detail="Words list is required")
 
     words_str = ", ".join(words)
-    logger.info(f"[{request_id}] Prepared words string: {words_str}")
     
-    # Customize prompt based on topic
-    topic_context = ""
-    if topic == "Harry Potter":
-        topic_context = "Set the story in the magical world of Hogwarts. You can include characters like Harry, Hermione, or Ron. The tone should be magical and adventurous."
-    elif topic == "The Avengers":
-        topic_context = "Set the story in the Marvel Cinematic Universe. Include superheroes like Iron Man, Captain America, or Thor. The tone should be action-packed and heroic."
-    elif topic == "Chinese History":
-        topic_context = "Set the story in ancient China. You can include elements like the Great Wall, emperors, or traditional festivals. The tone should be respectful and educational."
-    elif topic == "Western History":
-        topic_context = "Set the story in a significant period of Western history (e.g., Ancient Rome, Renaissance, or Victorian Era). The tone should be historical and descriptive."
-    elif topic == "Astronomy":
-        topic_context = "Set the story in outer space, observing stars, planets, or galaxies. You can include astronauts or telescopes. The tone should be awe-inspiring and scientific."
-    elif topic == "Geography":
-        topic_context = "Set the story in a specific landscape like mountains, rivers, deserts, or forests. Focus on the physical features of the earth. The tone should be adventurous and descriptive."
-    elif topic == "Math":
-        topic_context = "The story should involve solving puzzles, numbers, geometry, or logic. The characters might be students or mathematicians. The tone should be logical and clever."
-    elif topic == "Physics":
-        topic_context = "The story should involve forces, motion, energy, or experiments. You can include concepts like gravity or electricity. The tone should be curious and analytical."
-    elif topic == "Informatics":
-        topic_context = "Set the story in the digital world, involving computers, coding, AI, or robots. The tone should be modern and technological."
-    elif topic == "Biology":
-        topic_context = "The story should involve animals, plants, ecosystems, or the human body. The tone should be observational and naturalistic."
-    elif topic == "Chemistry":
-        topic_context = "The story should involve mixing potions, chemical reactions, or laboratory experiments. The tone should be experimental and precise."
-    elif topic == "Art":
-        topic_context = "The story should involve painting, music, museums, or creativity. The tone should be artistic and expressive."
-    elif topic == "Minecraft":
-        topic_context = "Set the story in the blocky world of Minecraft. Include elements like mining, crafting, building, creepers, or zombies. The tone should be adventurous and creative."
-    elif topic == "Jokes":
-        topic_context = "Write a funny, child-friendly joke or humorous story. It should have a setup and a punchline, or a funny situation. The tone should be lighthearted and amusing."
-    else:
-        topic_context = f"The topic is {topic}."
-
-    # Determine difficulty description based on level
-    if level == "KET":
-        difficulty_desc = (
-            "CEFR A1/A2 (Elementary). "
-            "Use strict simple sentences (Subject-Verb-Object). "
-            "Avoid relative clauses or passive voice. "
-            "Story style: Simple children's book."
-        )
-        length_instruction = "Keep the story very short, strictly under 50 words. Max 5 sentences."
-        quiz_instruction = "Create 3 very simple multiple-choice questions. Focus on direct facts from the story. Options should be short and simple."
-        # Simplify topic for KET
-        topic_context = f"Topic: {topic}. Keep it very simple and child-friendly. Avoid complex background or lore."
+    # Prompt construction
+    difficulty_desc = ""
+    length_instruction = ""
+    quiz_instruction = ""
     
+    if level == "Primary School":
+        difficulty_desc = "CEFR A1/A2. Use very simple vocabulary and short sentences (5-8 words). Present tense mostly."
+        length_instruction = "Write a short story, around 50-80 words. Around 8 sentences."
+        quiz_instruction = "Create 3 very simple multiple-choice questions. Focus on direct facts from the text."
+    elif level == "KET":
+        difficulty_desc = "CEFR A2. Use simple sentences and basic connectors (and, but, because)."
+        length_instruction = "Write a short story, around 80-100 words. Around 10 sentences."
+        quiz_instruction = "Create 3 simple multiple-choice questions."
     elif level == "PET":
-        difficulty_desc = (
-            "CEFR B1 (Intermediate). "
-            "Use standard compound sentences (connected with 'and', 'but', 'because'). "
-            "Can use simple past and present perfect tenses. "
-            "Story style: Casual blog post or diary entry."
-        )
-        length_instruction = "Keep the story short, around 80 words. Around 8 sentences."
-        quiz_instruction = "Create 3 straightforward multiple-choice questions. Focus on understanding the main idea and specific details. Options should be clear."
-
+        difficulty_desc = "CEFR B1. Use standard grammar, some compound sentences. Moderate vocabulary."
+        length_instruction = "Write a story around 120 words. Around 12 sentences."
+        quiz_instruction = "Create 3 moderate multiple-choice questions."
     elif level == "Junior High":
-        difficulty_desc = (
-            "CEFR B1+ (Junior High School). "
-            "Use varied sentence structures including simple relative clauses. "
-            "Story style: Young adult fiction."
-        )
-        length_instruction = "Keep the story moderate length, around 100-120 words. Around 10-12 sentences."
-        quiz_instruction = "Create 3 multiple-choice questions. Focus on vocabulary usage and reading comprehension. Options should be distinct."
-
+        difficulty_desc = "CEFR B1/B2. Use varied sentence structures. Standard textbook vocabulary."
+        length_instruction = "Write a story around 120-150 words. Around 12-15 sentences."
+        quiz_instruction = "Create 3 standard multiple-choice questions."
     elif level == "Senior High":
         difficulty_desc = (
             "CEFR B2 (Senior High School). "
@@ -253,7 +211,6 @@ def generate_story(
         )
         length_instruction = "Write a longer story, around 150-180 words. Around 15 sentences."
         quiz_instruction = "Create 3 challenging multiple-choice questions. Focus on inference, synonym matching, and context clues. Options should be slightly ambiguous to test precision."
-
     elif level == "Postgraduate":
         difficulty_desc = (
             "CEFR C1/C2 (Advanced/Academic). "
@@ -262,12 +219,18 @@ def generate_story(
         )
         length_instruction = "Write a comprehensive story, at least 200 words. At least 15-20 sentences with deep context."
         quiz_instruction = "Create 3 advanced multiple-choice questions. Focus on deep reading comprehension, tone analysis, and nuanced vocabulary usage. Options should be complex and require critical thinking."
-
     else:
         # Default fallback
         difficulty_desc = "Intermediate level (CEFR B1). Use standard vocabulary and sentence structures."
         length_instruction = "Keep the story moderate length, around 10-15 sentences."
         quiz_instruction = "Create 3 standard multiple-choice questions testing comprehension."
+
+    # Adjust Topic context based on Level to avoid mismatch (e.g., "Postgraduate" + "Daily Life" should be "Sociological analysis of daily life")
+    topic_context = topic
+    if level in ["Senior High", "Postgraduate"] and topic == "Daily Life":
+        topic_context = "Sociological or Psychological analysis of modern daily routines"
+    if level == "Primary School" and topic == "Science":
+        topic_context = "Simple science fun facts (e.g. why sky is blue)"
 
     prompt = f"""
     You are an expert English teacher creating reading materials for students.
@@ -309,31 +272,76 @@ def generate_story(
     Ensure the JSON is valid. Do not include markdown formatting (```json) around the JSON output, just the raw JSON string.
     """
     
+    if stream:
+        async def generate_stream():
+            try:
+                # No retry logic for stream yet, as it complicates the generator. 
+                # Rely on client reconnection or simple fail.
+                logger.info(f"[{request_id}] Starting Stream API call...")
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that outputs raw JSON without markdown formatting."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    stream=True
+                )
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+                logger.info(f"[{request_id}] Stream finished.")
+            except Exception as e:
+                logger.error(f"[{request_id}] Stream Error: {str(e)}")
+                # In a stream, we can't easily change status code once started, 
+                # but we can yield an error message if the client expects it, 
+                # or just close the stream.
+                yield "" 
+
+        return StreamingResponse(generate_stream(), media_type="text/event-stream")
+
+    # Non-streaming logic (keep existing retry logic)
     try:
         start_time = time.time()
         logger.info(f"[{request_id}] Calling SiliconFlow API (Model: {MODEL})...")
         
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that outputs raw JSON without markdown formatting."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"}
-        )
-        duration = time.time() - start_time
-        logger.info(f"[{request_id}] API call successful. Duration: {duration:.2f}s")
+        # Retry logic
+        max_retries = 3
+        retry_delay = 2 # seconds
+        content = ""
         
-        content = response.choices[0].message.content
+        for attempt in range(max_retries):
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that outputs raw JSON without markdown formatting."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                content = response.choices[0].message.content
+                logger.info(f"[{request_id}] API call successful (Attempt {attempt+1}).")
+                break
+            except Exception as api_err:
+                logger.warning(f"[{request_id}] API Attempt {attempt+1} failed: {str(api_err)}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                else:
+                    raise api_err
+
+        duration = time.time() - start_time
+        logger.info(f"[{request_id}] Total duration: {duration:.2f}s")
         logger.info(f"[{request_id}] Response content length: {len(content)}")
         
         return json.loads(content)
     except json.JSONDecodeError as je:
         logger.error(f"[{request_id}] JSON Parse Error: {str(je)}")
         logger.error(f"[{request_id}] Raw content: {content[:500]}...") # Log first 500 chars
-        raise HTTPException(status_code=500, detail="Failed to parse AI response as JSON.")
+        # Fallback or Error
+        raise HTTPException(status_code=500, detail="Failed to parse AI response")
     except Exception as e:
-        logger.error(f"[{request_id}] General Error: {str(e)}")
+        logger.error(f"[{request_id}] Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/audio")
