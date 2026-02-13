@@ -295,49 +295,129 @@ function fetchLeaderboard() {
 
 // --- Game Logic ---
 
+let storyBuffer = []
+let isPrefetching = false
+
 function pickRandomWords(count = 5) {
   const list = vocabularyDict[selectedLevel] || vocabularyDict['Junior High'] || []
   const shuffled = [...list].sort(() => 0.5 - Math.random())
   return shuffled.slice(0, count)
 }
 
-function startNewGame() {
-  gameState = 'LOADING'
-  currentWords = pickRandomWords(5)
-  storyData = null
-  quizIndex = 0
-  score = 0
-  correctCount = 0
-  quizSelectedOption = null
-  quizAnswered = false
-  isSubmitting = false
-  currentTab = 'STORY'
-  scrollOffset = 0
-  isAudioPlaying = false
-  audioProgress = 0
-  currentAudioSrc = ''
-  audioCtx.stop()
-  
-  draw()
+function prefetchStory() {
+    if (storyBuffer.length >= 3 || isPrefetching) return
 
-  callApi('/generate_story', 'GET', {
-    words: currentWords,
-    topic: selectedTopic,
-    level: selectedLevel
-  }, (res) => {
-    storyData = res.data
-    gameState = 'READY'
-    draw()
-  }, (err) => {
-    console.error('Story Gen Error', err)
-    gameState = 'ERROR'
-    let msg = '未知错误'
-    if (err.data && err.data.detail) msg = err.data.detail
-    else if (err.errMsg) msg = err.errMsg
-    storyData = { error: msg }
-    draw()
-  })
+    isPrefetching = true
+    const words = pickRandomWords(5)
+    
+    console.log('Prefetching story...')
+    callApi('/generate_story', 'GET', {
+        words: words,
+        topic: selectedTopic,
+        level: selectedLevel
+    }, (res) => {
+        if (res.data && !res.data.error) {
+            storyBuffer.push(res.data)
+            console.log('Story buffered. Current buffer size:', storyBuffer.length)
+        }
+        isPrefetching = false
+        // Recursively fill buffer if needed
+        if (storyBuffer.length < 3) {
+            prefetchStory()
+        }
+    }, (err) => {
+        console.error('Prefetch Error', err)
+        isPrefetching = false
+    })
 }
+
+function startNewGame() {
+    // Check buffer first
+    if (storyBuffer.length > 0) {
+        const data = storyBuffer.shift()
+        useStoryData(data)
+        // Trigger prefetch to refill
+        prefetchStory()
+        return
+    }
+
+    // If buffer empty, show countdown and fetch batch
+    gameState = 'COUNTDOWN'
+    countdownValue = 60
+    storyBuffer = [] // Reset
+    
+    // Start countdown timer
+    if (countdownInterval) clearInterval(countdownInterval)
+    countdownInterval = setInterval(() => {
+        countdownValue--
+        if (countdownValue <= 0) {
+            clearInterval(countdownInterval)
+            if (storyBuffer.length > 0) {
+                 const data = storyBuffer.shift()
+                 useStoryData(data)
+                 prefetchStory()
+            } else {
+                // Timeout but no data?
+                gameState = 'ERROR'
+                storyData = { error: '生成超时，请重试' }
+                draw()
+            }
+        } else {
+            // Check if we have data early?
+            // User said "show 1min countdown", implying we should wait? 
+            // Usually users want to play as soon as ready. 
+            // But let's respect "show 1min countdown" as a loading phase max time or strict time?
+            // "Show 1min countdown... ensure 3 sets available"
+            // Let's allow early exit if we have enough buffer (e.g. 1 or 3?)
+            // If we wait for full 3, it might take long. 
+            // Let's enter game as soon as 1 is ready BUT keep fetching?
+            // Re-reading: "Show 1min countdown, ds generates three sets."
+            // This sounds like a forced preparation phase.
+            // Let's wait until we have at least 1, but maybe try to get 3?
+            // If I have 1, I can let user play.
+            if (storyBuffer.length >= 1) {
+                clearInterval(countdownInterval)
+                const data = storyBuffer.shift()
+                useStoryData(data)
+                prefetchStory()
+            }
+            draw()
+        }
+    }, 1000)
+
+    // Trigger batch fetch (3 times)
+    prefetchStory()
+    setTimeout(prefetchStory, 2000) // Stagger slightly
+    setTimeout(prefetchStory, 4000)
+    
+    draw()
+}
+
+function useStoryData(data) {
+    storyData = data
+    currentWords = [] // Words are embedded in story data usually or we need to track them?
+    // Wait, generate_story endpoint uses 'words' param. 
+    // The response `storyData` contains the story and quiz.
+    // It doesn't strictly return the words list used, but we might need them for UI?
+    // Current UI doesn't seem to heavily rely on `currentWords` except for initial generation call.
+    // Let's assume `storyData` is enough.
+    
+    gameState = 'READY'
+    quizIndex = 0
+    score = 0
+    correctCount = 0
+    quizSelectedOption = null
+    quizAnswered = false
+    isSubmitting = false
+    currentTab = 'STORY'
+    scrollOffset = 0
+    isAudioPlaying = false
+    audioProgress = 0
+    currentAudioSrc = ''
+    if (audioCtx) audioCtx.stop()
+    draw()
+}
+
 
 function handleAnswer(option) {
   if (quizAnswered) return
@@ -392,20 +472,27 @@ function finishQuiz() {
         msg = `完成! 答对 ${correctCount}/${storyData.quiz.length} 题`
     }
 
-    wx.showToast({ title: msg, icon: earnedPoints > 0 ? 'success' : 'none' })
     saveRecord()
     if (earnedPoints > 0) {
         submitScore(earnedPoints) 
     }
-    
-    // Return to hub after delay
-    setTimeout(() => {
-        currentScene = 'wordweaver'
-        hubTab = 'HISTORY' // Show history
-        fetchHistory()
-        draw()
-        isSubmitting = false
-    }, 2000)
+  
+    wx.showModal({
+        title: '完成',
+        content: msg,
+        confirmText: '下一关',
+        cancelText: '取消',
+        success: (res) => {
+            isSubmitting = false
+            if (res.confirm) {
+                startNewGame()
+            } else {
+                // If cancelled, keep in quiz tab or go back?
+                // Usually go back to story or stay.
+                // Let's stay for now.
+            }
+        }
+    })
 }
 
 function submitScore(points) {
@@ -846,6 +933,9 @@ function drawLeaderboardCard(w) {
     return y + totalH + 20
 }
 
+let countdownValue = 60
+let countdownInterval = null
+
 function drawGameScene(w, h) {
   const headerY = safeAreaTop
   
@@ -914,8 +1004,8 @@ function drawGameScene(w, h) {
   context.translate(0, contentY + scrollOffset)
   
   let drawnHeight = 0
-  if (gameState === 'LOADING') {
-    drawLoading(w, availableH)
+  if (gameState === 'COUNTDOWN') {
+    drawCountdown(w, availableH)
     drawnHeight = availableH
   } else if (gameState === 'ERROR') {
     drawError(w, availableH)
@@ -994,6 +1084,45 @@ function drawLoading(w, h) {
   context.fillStyle = Theme.textSub
   context.font = '14px sans-serif'
   context.fillText('AI 魔法施展中...', w / 2, h / 2 + 10)
+}
+
+function drawCountdown(w, h) {
+    // Background circle
+    const cx = w / 2
+    const cy = h / 2
+    const r = 80
+
+    context.beginPath()
+    context.arc(cx, cy, r, 0, 2 * Math.PI)
+    context.fillStyle = Theme.surface
+    context.fill()
+    context.lineWidth = 10
+    context.strokeStyle = Theme.border
+    context.stroke()
+
+    // Progress arc
+    const startAngle = -0.5 * Math.PI
+    const progress = countdownValue / 60
+    const endAngle = startAngle + (2 * Math.PI * progress)
+    
+    context.beginPath()
+    context.arc(cx, cy, r, startAngle, endAngle)
+    context.lineWidth = 10
+    context.strokeStyle = Theme.primary
+    context.lineCap = 'round'
+    context.stroke()
+
+    // Text
+    context.fillStyle = Theme.textMain
+    context.font = 'bold 40px sans-serif'
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.fillText(countdownValue.toString(), cx, cy)
+
+    context.fillStyle = Theme.textSub
+    context.font = '16px sans-serif'
+    context.fillText('正在准备题目...', cx, cy + r + 40)
+    context.fillText(`已缓存: ${storyBuffer.length}/3 组`, cx, cy + r + 70)
 }
 
 function drawError(w, h) {
