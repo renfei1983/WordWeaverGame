@@ -61,12 +61,18 @@ function utf8Decode(uint8array) {
 const canvas = wx.createCanvas()
 const context = canvas.getContext('2d')
 
+// Ensure timers are available in local scope
+const setTimeout = GameGlobal.setTimeout || window.setTimeout || function(cb, ms) { cb() }
+const clearTimeout = GameGlobal.clearTimeout || window.clearTimeout || function() {}
+const setInterval = GameGlobal.setInterval || window.setInterval || function(cb, ms) { return 0 }
+const clearInterval = GameGlobal.clearInterval || window.clearInterval || function() {}
+
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
 // TODO: Replace with your Cloud Run Public Access URL for streaming
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.0'
+const BACKEND_VERSION = 'v1.5.1'
 
 // --- Constants ---
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -289,10 +295,28 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
         },
         fail: (err) => {
             console.error('Stream request failed', err)
-            if (onFail) onFail(err)
+            
+            // Fallback to non-streaming API (Cloud Function)
+            console.log('Falling back to non-streaming API...')
+            // Remove stream parameter from path/data if present
+            // But callApi handles params itself.
+            // We reuse the original path and data.
+            
+            callApi(path, method, data, (res) => {
+                // Success from non-streaming
+                // res is the full response object
+                console.log('Fallback success', res)
+                
+                // Simulate streaming by sending full JSON string as one chunk
+                const jsonStr = JSON.stringify(res)
+                if (onChunk) onChunk(jsonStr)
+                if (onSuccess) onSuccess()
+            }, (err2) => {
+                console.error('Fallback failed', err2)
+                if (onFail) onFail(err2)
+            })
         }
     })
-
     requestTask.onChunkReceived((res) => {
         const arrayBuffer = res.data
         const uint8Array = new Uint8Array(arrayBuffer)
