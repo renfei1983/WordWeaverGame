@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
         project,
-        version: '1.6.0',
-        desc: 'Deployed via Trae IDE - Enable Streaming & DeepSeek V3 (v1.6.0)',
+        version: '1.6.1',
+        desc: 'Deployed via Trae IDE - Cloud Hosting Streaming Ready (v1.6.1)',
         setting: {
         es6: true,
         minify: true,

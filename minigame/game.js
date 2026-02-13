@@ -71,9 +71,10 @@ const clearInterval = GameGlobal.clearInterval || window.clearInterval || functi
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
 const USE_STREAM = true // Enable streaming for Cloud Container
-// TODO: Replace with your Cloud Container Public Domain (ending in run.weixin.qq.com)
+// TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
+// The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.6.0'
+const BACKEND_VERSION = 'v1.6.1'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
