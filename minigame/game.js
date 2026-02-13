@@ -275,75 +275,74 @@ function callApi(path, method, data, success, fail) {
 function buildStoryPrompt(words, level, topic) {
   const words_str = words.join(", ")
   
-  let difficulty_desc = ""
-  let length_instruction = ""
-  let quiz_instruction = ""
+  // --- Enhanced 2026 Educational Prompt Engineering ---
+  let system_persona = "You are an elite bilingual educator specializing in interdisciplinary teaching (CLIL)."
+  let difficulty_context = ""
   
+  // Level-specific adjustment
   if (level === "KET") {
-      difficulty_desc = "CEFR A2. Use simple sentences and basic connectors (and, but, because)."
-      length_instruction = "Write a short story, around 80-120 words. Around 5-10 sentences."
-      quiz_instruction = "Create 3 simple multiple-choice questions."
+      difficulty_context = "CEFR A2 (Elementary). Use simple Subject-Verb-Object structures. Vocabulary should be high-frequency daily words."
   } else if (level === "PET") {
-      difficulty_desc = "CEFR B1. Use standard grammar, some compound sentences. Moderate vocabulary."
-      length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
-      quiz_instruction = "Create 3 moderate multiple-choice questions."
+      difficulty_context = "CEFR B1 (Intermediate). Introduce relative clauses and perfect tenses. Focus on clear narrative flow."
   } else if (level === "Junior High") {
-      difficulty_desc = "CEFR B1/B2. Use varied sentence structures. Standard textbook vocabulary."
-      length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
-      quiz_instruction = "Create 3 standard multiple-choice questions."
+      difficulty_context = "CEFR B1+. Mix formal and informal registers appropriate for school life. Use standard textbook grammar."
   } else if (level === "Senior High") {
-      difficulty_desc = "CEFR B2 (Senior High School). Use complex grammar: passive voice, conditionals (if...), and participial phrases. Story style: News article or formal essay."
-      length_instruction = "Write a longer story, around 180-220 words. Around 20 sentences."
-      quiz_instruction = "Create 3 challenging multiple-choice questions. Focus on inference, synonym matching, and context clues. Options should be slightly ambiguous to test precision."
+      difficulty_context = "CEFR B2 (Upper Intermediate). Use sophisticated vocabulary, passive voice, and conditionals. Text should resemble a reputable news article or academic essay."
   } else if (level === "Postgraduate") {
-      difficulty_desc = "CEFR C1/C2 (Advanced/Academic). Use highly sophisticated grammar: inversion, subjunctive mood, and long compound-complex sentences. Story style: Academic paper, classic literature, or The Economist."
-      length_instruction = "Write a comprehensive story, at least 250 words. Around 25 sentences with deep context."
-      quiz_instruction = "Create 3 advanced multiple-choice questions. Focus on deep reading comprehension, tone analysis, and nuanced vocabulary usage. Options should be complex and require critical thinking."
+      difficulty_context = "CEFR C1/C2 (Advanced). Use nuanced expression, complex syntactic structures, and academic tone. Text should resemble The Economist or Nature."
   } else {
-      difficulty_desc = "Intermediate level (CEFR B1). Use standard vocabulary and sentence structures."
-      length_instruction = "Keep the story moderate length, around 10-15 sentences."
-      quiz_instruction = "Create 3 standard multiple-choice questions testing comprehension."
+      difficulty_context = "CEFR B1. Standard difficulty."
   }
 
-  let topic_context = topic
-  if ((level === "Senior High" || level === "Postgraduate") && topic === "Daily Life") {
-      topic_context = "Sociological or Psychological analysis of modern daily routines"
+  // Topic-driven Scenario Injection (The "WordWeaver" Magic)
+  // We explicitly guide the AI to weave words into specific, educational scenarios.
+  let scenario_guidance = ""
+  if (topic === "Daily Life") {
+      scenario_guidance = "Scenario: A relatable day-to-day situation (e.g., shopping, travel, family dinner)."
+  } else if (topic === "Science") {
+      scenario_guidance = "Scenario: A popular science explanation or a lab experiment report."
+  } else if (topic === "History") {
+      scenario_guidance = "Scenario: A historical event narration or a biography of a famous figure."
+  } else if (topic === "Technology") {
+      scenario_guidance = "Scenario: A tech review or a futuristic sci-fi glimpse."
+  } else {
+      scenario_guidance = `Scenario: A creative context fitting the topic '${topic}'.`
   }
 
   return `
-    You are an expert English teacher creating reading materials for students.
+    ${system_persona}
     
-    TASK: Write a story using these words: ${words_str}.
+    TASK: Compose a cohesive, engaging story that naturally integrates these target words: ${words_str}.
     
-    CONSTRAINTS (MUST FOLLOW):
-    1. LEVEL: ${difficulty_desc}
-    2. LENGTH: ${length_instruction}
-    3. TOPIC: ${topic_context}
+    CONTEXT & CONSTRAINTS:
+    1. **Target Level**: ${difficulty_context}
+    2. **Scenario**: ${scenario_guidance}
+    3. **Word Integration**: Highlight target words in Markdown bold (**word**). They must fit grammatically and contextually.
+    4. **Length**: 
+       - KET/PET: 80-120 words.
+       - Junior/Senior High: 150-200 words.
+       - Postgraduate: 200-250 words.
     
-    IMPORTANT: The LEVEL and LENGTH constraints are STRICT. Adapt the Topic to fit the Level.
-    - If Level is KET/Elementary, ignore complex topic details. Focus ONLY on simple actions and objects.
-    - Do NOT write a long story if the length instruction says "short".
-    - Do NOT exceed the word count limit.
+    OUTPUT REQUIREMENTS (JSON Format):
+    1. **content**: The English story. Ensure proper paragraphing.
+    2. **translation**: A high-quality Chinese translation that captures the tone and nuance, not just literal meaning.
+    3. **translation_map**: Key-value pairs for the target words (English -> Chinese).
+    4. **quiz**: Create 3 multiple-choice questions (A/B/C/D).
+       - Question 1: **Vocabulary in Context** (Test the meaning of a target word in this specific story).
+       - Question 2: **Reading Comprehension** (Test understanding of a plot point or detail).
+       - Question 3: **Inference/Grammar** (Test implied meaning or grammatical usage of a target word).
+       - **Crucial**: The 'answer' field must be the full string of the correct option (e.g., "Option A text").
     
-    Highlight the target words in Markdown bold (**word**).
-    
-    ALSO, generate 3 multiple-choice questions to test the user's understanding of the vocabulary words in the context of the story. 
-    QUIZ DIFFICULTY: ${quiz_instruction}
-    The questions and options must be in English.
-    
-    The output must be a valid JSON object with the following structure:
+    STRICT JSON OUTPUT STRUCTURE:
     {
-        "content": "The story content in markdown...",
-        "translation": "The full chinese translation of the story...",
-        "translation_map": {
-            "word1": "chinese_translation1",
-            "word2": "chinese_translation2"
-        },
+        "content": "Story text...",
+        "translation": "Chinese translation...",
+        "translation_map": { "word": "translation" },
         "quiz": [
             {
-                "question": "Question text here?",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "answer": "Option A"
+                "question": "What does 'word' mean in the story?",
+                "options": ["Meaning A", "Meaning B", "Meaning C", "Meaning D"],
+                "answer": "Meaning A"
             }
         ]
     }
