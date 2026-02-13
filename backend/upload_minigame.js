@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
         project,
-        version: '1.5.8',
-        desc: 'Deployed via Trae IDE - Adjust Difficulty & Model Qwen3-235B (v1.5.8)',
+        version: '1.5.9',
+        desc: 'Deployed via Trae IDE - Switch to Qwen2.5-72B (v1.5.9)',
         setting: {
         es6: true,
         minify: true,

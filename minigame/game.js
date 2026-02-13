@@ -73,7 +73,7 @@ const USE_CLOUD = true
 const USE_STREAM = false // Disable streaming (DNS issues), fallback to Cloud Container
 // TODO: Replace with your Cloud Run Public Access URL for streaming
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.8'
+const BACKEND_VERSION = 'v1.5.9'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
