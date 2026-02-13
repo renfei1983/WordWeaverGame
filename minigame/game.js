@@ -79,27 +79,27 @@ const BACKEND_VERSION = 'v1.5.3'
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
 const TOPICS = ['Daily Life', 'Science', 'Art', 'Harry Potter', 'Avengers', 'Minecraft']
 
-// --- Theme Configuration (Modern Minimalism) ---
+// --- Theme Configuration (Modern Minimalism - Revamped) ---
 const Theme = {
-  bg: '#F5F7FA',       // Light Grey Background (Global)
+  bg: '#F7F8FA',       // Very Light Blue-Grey (Global)
   surface: '#FFFFFF',  // Pure White (Cards/Surface)
-  primary: '#409EFF',  // Soft Blue (Primary Action)
+  primary: '#3B82F6',  // Vivid Blue (Primary Action)
   primaryTxt: '#FFFFFF', // Text on Primary
-  secondary: '#E4E7ED', // Light Gray (Secondary Action)
-  secondaryTxt: '#606266', // Text on Secondary
-  textMain: '#303133', // Dark Gray (Headings)
-  textSub: '#606266',  // Medium Gray (Subtext)
-  textLight: '#909399', // Lighter Gray (Auxiliary)
-  accent: '#67C23A',   // Green (Success/Start)
-  error: '#F56C6C',    // Soft Red
-  border: '#DCDFE6',   // Light Border
-  shadow: 'rgba(0, 0, 0, 0.05)' // Very subtle shadow
+  secondary: '#F3F4F6', // Very Light Gray (Secondary Action/Options)
+  secondaryTxt: '#374151', // Dark Gray (Text on Secondary)
+  textMain: '#111827', // Almost Black (Headings - Sharp)
+  textSub: '#6B7280',  // Medium Gray (Subtext)
+  textLight: '#9CA3AF', // Lighter Gray (Auxiliary)
+  accent: '#10B981',   // Emerald Green (Success)
+  error: '#EF4444',    // Red (Error)
+  border: '#E5E7EB',   // Gray Border
+  shadow: 'rgba(0, 0, 0, 0.08)' // Soft, modern shadow
 }
 
 // --- System Info & Layout ---
 const sysInfo = wx.getSystemInfoSync()
 const safeAreaTop = sysInfo.statusBarHeight || 20
-const headerHeight = 54 // Increased for better touch target and spacing
+const headerHeight = 60 // Increased for better touch target and spacing
 const tabBarHeight = 60 // Increased for easier clicking
 const audioPlayerHeight = 90
 const contentTop = safeAreaTop + headerHeight + tabBarHeight
@@ -1124,10 +1124,10 @@ function drawGameScene(w, h) {
   
   // Removed border line in favor of shadow
 
-  const tabY = safeAreaTop + headerHeight
+  const tabY = safeAreaTop + headerHeight + 10
   drawTabBar(w, tabY)
 
-  const contentY = tabY + tabBarHeight
+  const contentY = tabY + tabBarHeight + 20
   let availableH = h - contentY
   if (currentTab === 'STORY') availableH -= audioPlayerHeight
   
@@ -1355,91 +1355,102 @@ function drawTranslationTab(w) {
 }
 
 function drawQuizTab(w) {
-  let y = 20
+  let y = 30
   const q = storyData.quiz[quizIndex]
   if (!q) return y
   
-  // Calculate Card Height
-  const qLines = wrapText(context, q.question, w - 80, 18) // Adjusted for card padding
-  const qTextHeight = qLines.length * 28
+  // Card Layout
+  const cardW = w - 32 // 16px margin on each side
+  const innerPadding = 24
+  const textW = cardW - (innerPadding * 2)
   
-  const optionsHeight = q.options.length * 65
-  const buttonsHeight = 44 + 20
+  // Calculate Heights
+  const qLines = wrapText(context, q.question, textW, 20) 
+  const qTextHeight = qLines.length * 32 // 20px font, 32px line height
   
-  const totalH = 30 + qTextHeight + 20 + optionsHeight + buttonsHeight + 40
+  const optionBtnH = 56
+  const optionGap = 16
+  const optionsHeight = q.options.length * (optionBtnH + optionGap)
   
-  drawCard(20, y, w - 40, totalH)
+  const actionBtnH = 50
+  const actionSectionH = actionBtnH + 10 // +10 margin top
   
-  let innerY = y + 20
+  // Total Card Height
+  const totalH = 30 + qTextHeight + 30 + optionsHeight + 30 + actionSectionH + 30
   
+  drawCard(16, y, cardW, totalH)
+  
+  let innerY = y + 30
+  
+  // Question Counter
   context.fillStyle = Theme.textSub
-  context.font = '14px sans-serif'
+  context.font = 'bold 14px sans-serif'
   context.textAlign = 'center'
   context.fillText(`第 ${quizIndex + 1} / ${storyData.quiz.length} 题`, w/2, innerY)
-  innerY += 40
+  innerY += 30
   
+  // Question Text
   context.fillStyle = Theme.textMain
-  context.font = 'bold 18px sans-serif'
+  context.font = 'bold 20px sans-serif'
   context.textAlign = 'left'
   
-  qLines.forEach(line => {
-    context.fillText(line, 40, innerY)
-    innerY += 28
-  })
-  innerY += 20
+  const startX = 16 + innerPadding
   
+  qLines.forEach(line => {
+    context.fillText(line, startX, innerY)
+    innerY += 32
+  })
+  innerY += 30 // Gap before options
+  
+  // Options
   q.options.forEach(opt => {
-    let bgColor = Theme.secondary // Default option bg (Ghost/Light Grey)
-    let txtColor = Theme.textMain
+    let bgColor = Theme.secondary 
+    let txtColor = Theme.secondaryTxt
     let borderColor = null
     
     if (quizAnswered) {
       if (opt === q.answer) {
-        bgColor = 'rgba(103, 194, 58, 0.2)' // Theme.accent with opacity
+        bgColor = 'rgba(16, 185, 129, 0.15)' // Theme.accent low opacity
         borderColor = Theme.accent
         txtColor = Theme.accent
       } else if (opt === quizSelectedOption) {
-        bgColor = 'rgba(245, 108, 108, 0.2)' // Theme.error with opacity
+        bgColor = 'rgba(239, 68, 68, 0.15)' // Theme.error low opacity
         borderColor = Theme.error
         txtColor = Theme.error
       }
     }
     
-    // Use Ghost Button style for options? Or Light Grey?
-    // Prompt: "Secondary Button: Light Gray background (#E4E7ED) + Dark Gray text"
-    // So Theme.secondary is fine.
+    drawButton(startX, innerY, textW, optionBtnH, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, contentTop + scrollOffset + innerY, borderColor)
     
-    drawButton(40, innerY, w - 80, 50, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, contentTop + scrollOffset + innerY, borderColor)
-    
-    innerY += 65
+    innerY += (optionBtnH + optionGap)
   })
   
-  innerY += 10
+  innerY += 14 // Extra gap before action buttons
   
-  // Next / Skip Button
-  const btnW = (w - 100) / 2 // Adjusted width for card padding (40 left + 40 right + 20 gap)
+  // Action Buttons (Skip & Next)
   const isLast = quizIndex === storyData.quiz.length - 1
   
-  // Skip Button (Left)
+  // Skip Button (Ghost Style)
   if (!isLast) {
-      drawButton(40, innerY, btnW, 44, 'transparent', '跳过', '', true, () => {
+      const skipW = 80
+      drawButton(startX, innerY, skipW, actionBtnH, 'transparent', '跳过', '', true, () => {
           skipQuestion()
-      }, Theme.textSub, 16, false, contentTop + scrollOffset + innerY, Theme.border) // Ghost button with border
+      }, Theme.textLight, 16, false, contentTop + scrollOffset + innerY)
   }
   
-  const nextLabel = isLast ? '完成' : '下一题'
+  const nextLabel = isLast ? '完成测试' : '下一题'
+  const nextBtnW = isLast ? textW : (textW - 100) 
   
-  const rightBtnX = isLast ? (w - 140)/2 + 20 : (40 + btnW + 20)
-  const rightBtnW = isLast ? 100 : btnW
+  const nextX = isLast ? startX : (startX + textW - nextBtnW)
   
-  drawButton(rightBtnX, innerY, rightBtnW, 44, Theme.primary, nextLabel, '', true, () => {
+  drawButton(nextX, innerY, nextBtnW, actionBtnH, Theme.primary, nextLabel, '', true, () => {
       if (quizAnswered) {
           if (isLast) finishQuiz()
           else nextQuestion()
       } else {
           wx.showToast({ title: '请选择一个答案', icon: 'none' })
       }
-  }, Theme.primaryTxt, 16, false, contentTop + scrollOffset + innerY)
+  }, Theme.primaryTxt, 18, false, contentTop + scrollOffset + innerY)
   
   return y + totalH + 40
 }
@@ -1474,10 +1485,10 @@ function drawAudioPlayer(w, y, h) {
 
 function drawCard(x, y, w, h) {
     context.fillStyle = Theme.surface
-    context.shadowBlur = 12
+    context.shadowBlur = 16
     context.shadowColor = Theme.shadow
-    context.shadowOffsetY = 2
-    drawRoundedRect(context, x, y, w, h, 12, true, false)
+    context.shadowOffsetY = 4
+    drawRoundedRect(context, x, y, w, h, 20, true, false)
     context.shadowBlur = 0
     context.shadowOffsetY = 0
 }
@@ -1487,14 +1498,10 @@ function drawButton(x, y, w, h, bg, text, subtext, interactive, callback, textCo
   
   if (borderColor) {
       context.strokeStyle = borderColor
-      context.lineWidth = 1
+      context.lineWidth = 1.5
   }
   
-  // Ghost button logic: if bg is transparent, don't fill unless we want hit area? 
-  // Actually drawRoundedRect handles fill if 'bg' is passed. 
-  // If bg is 'transparent', fill is transparent.
-  
-  drawRoundedRect(context, x, y, w, h, 10, true, !!borderColor)
+  drawRoundedRect(context, x, y, w, h, 14, true, !!borderColor)
   
   context.fillStyle = textColor
   context.font = `bold ${fontSize}px sans-serif`
@@ -1502,10 +1509,10 @@ function drawButton(x, y, w, h, bg, text, subtext, interactive, callback, textCo
   context.textBaseline = 'middle'
   
   if (subtext) {
-    context.fillText(text, x + w / 2, y + h / 2 - 8)
+    context.fillText(text, x + w / 2, y + h / 2 - 9)
     context.fillStyle = Theme.textSub
     context.font = '12px sans-serif'
-    context.fillText(subtext, x + w / 2, y + h / 2 + 12)
+    context.fillText(subtext, x + w / 2, y + h / 2 + 11)
   } else {
     context.fillText(text, x + w / 2, y + h / 2)
   }
