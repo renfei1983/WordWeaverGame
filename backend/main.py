@@ -49,10 +49,10 @@ app.add_middleware(
 # Note: User needs to set SILICONFLOW_API_KEY in .env
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 BASE_URL = "https://api.siliconflow.cn/v1"
-MODEL = "Pro/deepseek-ai/DeepSeek-V3.2" # Updated to Pro V3.2 per user request
-# MODEL = "deepseek-ai/DeepSeek-V3" # Fallback
+MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct" # Switch to Qwen3 Next 80B
+# MODEL = "deepseek-ai/DeepSeek-V3" # Previous
+# MODEL = "Pro/deepseek-ai/DeepSeek-V3.2" # Previous
 # MODEL = "Qwen/Qwen2.5-72B-Instruct" # Switch to Qwen 2.5 72B (Faster & Stable)
-# MODEL = "Qwen/Qwen2.5-7B-Instruct" # Ultra-fast fallback if 72B is still slow
 
 # WeChat Configuration
 WECHAT_APP_ID = os.getenv("WECHAT_APP_ID")
