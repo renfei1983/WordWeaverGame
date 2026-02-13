@@ -73,7 +73,7 @@ const USE_CLOUD = true
 const USE_STREAM = false // Disable streaming (DNS issues), fallback to Cloud Container
 // TODO: Replace with your Cloud Run Public Access URL for streaming
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.4'
+const BACKEND_VERSION = 'v1.5.5'
 
 // --- Constants ---
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -283,7 +283,7 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
          console.log('Streaming disabled or invalid URL, using fallback API...')
          callApi(path, method, data, (res) => {
             console.log('Fallback success', res)
-            const jsonStr = JSON.stringify(res)
+            const jsonStr = JSON.stringify(res.data)
             if (onChunk) onChunk(jsonStr)
             if (onSuccess) onSuccess()
         }, (err) => {
@@ -324,7 +324,7 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                 console.log('Fallback success', res)
                 
                 // Simulate streaming by sending full JSON string as one chunk
-                const jsonStr = JSON.stringify(res)
+                const jsonStr = JSON.stringify(res.data)
                 if (onChunk) onChunk(jsonStr)
                 if (onSuccess) onSuccess()
             }, (err2) => {
@@ -455,7 +455,11 @@ function prefetchStory(onProgress) {
         }
 
         try {
-            const data = JSON.parse(accumulatedJSON)
+            // Clean markdown code blocks if present
+            const cleanJSON = (str) => {
+              return str.replace(/```json\s*|\s*```/g, '').trim()
+            }
+            const data = JSON.parse(cleanJSON(accumulatedJSON))
             if (data && !data.error) {
                 storyBuffer.push(data)
                 console.log('Story buffered. Current buffer size:', storyBuffer.length)
