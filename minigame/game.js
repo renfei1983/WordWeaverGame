@@ -75,7 +75,7 @@ const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.8.0'
+const BACKEND_VERSION = 'v1.9.0'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -364,44 +364,73 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
              return
         }
 
-        // Create model with specific name instead of generic "hunyuan"
-        // Try "hunyuan-lite" or "deepseek-r1" directly as model name if needed, 
-        // but based on docs "hunyuan" usually works if "model" param is passed in data.
-        // However, the error says "model hunyuan not found in definitions".
-        // This implies createModel("hunyuan") is failing or the internal mapping is wrong.
-        // Let's try createModel("hunyuan-lite") directly or "deepseek".
-        // Actually, let's use the most standard one.
-        const ai = wx.cloud.extend.AI.createModel("deepseek") 
-        // Or keep "hunyuan" but maybe the library version in devtools is old?
-        // Let's try "deepseek" as it was mentioned in search results as supported.
-        // Wait, the error is `model hunyuan not found`.
-        // Let's change to "deepseek" to see if it works, or "hunyuan-exp".
-        
+        // --- Step 1: Get Available Models (Dynamic) ---
         ;(async () => {
             try {
-                await ai.streamText({
+                // 1. Get and print available models
+                let modelId = "hunyuan-lite" // Default fallback
+                if (wx.cloud.extend.AI.getModels) {
+                    try {
+                        const models = await wx.cloud.extend.AI.getModels()
+                        console.log('Available AI Models:', models)
+                        // If we find a suitable model in the list, we could use it
+                        // For now, we trust the user provided "hunyuan-exp" or "hunyuan-lite"
+                        if (models && models.length > 0) {
+                             const found = models.find(m => m.id === 'hunyuan-lite' || m.id === 'hunyuan-exp')
+                             if (found) modelId = found.id
+                        }
+                    } catch (e) {
+                        console.warn('getModels failed:', e)
+                    }
+                }
+
+                console.log('Using Model ID:', modelId)
+
+                // 2. Create Model Instance
+                // Use the user-suggested "hunyuan-exp" or fallback to "hunyuan"
+                const ai = wx.cloud.extend.AI.createModel("hunyuan") 
+
+                // 3. Call streamText with new interface (Async Iterable)
+                const res = await ai.streamText({
                     data: {
-                        model: "deepseek-v3", // Try DeepSeek V3
+                        model: modelId, 
                         messages: [
                             { role: "system", content: "You are a helpful assistant that outputs raw JSON without markdown formatting." },
                             { role: "user", content: prompt }
                         ]
-                    },
-                    onText: (text) => {
-                        // text is the incremental chunk
-                        if (text) onChunk(text)
-                    },
-                    onFinish: (fullText) => {
-                        console.log('AI Generation Finished')
-                        if (onSuccess) onSuccess()
-                    },
-                    onError: (err) => {
-                        console.error('AI Generation Error Callback:', err)
-                        if (onFail) onFail(err)
                     }
                 })
+
+                // 4. Handle Stream
+                if (res.eventStream) {
+                    for await (const event of res.eventStream) {
+                        if (event.data === "[DONE]") {
+                            break
+                        }
+                        try {
+                            const data = JSON.parse(event.data)
+                            // Standard OpenAI-like format: choices[0].delta.content
+                            const text = data?.choices?.[0]?.delta?.content
+                            if (text) {
+                                onChunk(text)
+                            }
+                        } catch (e) {
+                            // If not JSON, maybe raw text?
+                            // console.warn('Parse chunk failed:', e, event.data)
+                        }
+                    }
+                }
+
+                console.log('AI Generation Finished')
+                if (onSuccess) onSuccess()
+
             } catch (err) {
                 console.error('Hunyuan AI Exception:', err)
+                wx.showModal({
+                    title: 'AI 服务错误',
+                    content: '无法连接到智能模型: ' + (err.message || JSON.stringify(err)),
+                    showCancel: false
+                })
                 if (onFail) onFail(err)
             }
         })()

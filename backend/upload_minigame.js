@@ -26,11 +26,13 @@ const fs = require('fs')
   console.log('Uploading Minigame...')
   try {
     const uploadResult = await ci.upload({
-        project,
-        version: '1.8.0',
-        desc: 'Deployed via Trae IDE - Full Cloud Native Migration (v1.8.0)',
-        setting: {
-        es6: true,
+    project,
+    version: '1.9.0',
+    desc: 'Deployed via Trae IDE - 2026 AI Standard Update (v1.9.0)',
+    setting: {
+      es6: true
+    }
+  })
         minify: true,
         autoPrefixWXSS: true,
         minifyWXML: true,
