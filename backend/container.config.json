@@ -1,0 +1,12 @@
+{
+  "container": {
+    "image": "wordweaver-backend",
+    "port": 80,
+    "cpu": 0.5,
+    "memory": 1
+  },
+  "miniprogram": {
+    "appid": "wx13922e8b755b1ece",
+    "privateKeyPath": "private.wx13922e8b755b1ece.key"
+  }
+}

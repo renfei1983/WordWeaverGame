@@ -1,0 +1,35 @@
+{
+  "description": "WordWeaver Game Hub",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "preloadBackgroundData": false,
+    "minified": true,
+    "newFeature": true,
+    "coverView": true,
+    "nodeModules": false,
+    "autoAudits": false,
+    "showShadowRootInWxmlPanel": true,
+    "scopeDataCheck": false,
+    "uglifyFileName": false,
+    "checkInvalidSitemap": true
+  },
+  "compileType": "game",
+  "libVersion": "2.19.4",
+  "appid": "wx13922e8b755b1ece",
+  "projectname": "WordWeaverHub",
+  "debugOptions": {
+    "hidedInDevtools": []
+  },
+  "isGameTourist": false,
+  "simulatorType": "wechat",
+  "simulatorPluginLibVersion": {},
+  "condition": {
+    "game": {
+      "current": -1,
+      "list": []
+    }
+  }
+}
