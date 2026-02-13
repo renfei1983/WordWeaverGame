@@ -73,7 +73,7 @@ const USE_CLOUD = true
 const USE_STREAM = false // Disable streaming (DNS issues), fallback to Cloud Container
 // TODO: Replace with your Cloud Run Public Access URL for streaming
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.6'
+const BACKEND_VERSION = 'v1.5.7'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -102,7 +102,8 @@ const safeAreaTop = sysInfo.statusBarHeight || 20
 const headerHeight = 60 // Increased for better touch target and spacing
 const tabBarHeight = 60 // Increased for easier clicking
 const audioPlayerHeight = 90
-const contentTop = safeAreaTop + headerHeight + tabBarHeight + 30 // Matches contentY (header+10 + tab+20)
+const contentTop = safeAreaTop + headerHeight + tabBarHeight + 30 // Matches contentY (header+10 + tab+20) in Game Scene
+const hubContentTop = safeAreaTop + headerHeight + tabBarHeight // Matches contentY in Hub Scene
 
 // --- State Management ---
 let user = null
@@ -889,7 +890,7 @@ function drawSelectionCard(w) {
                 isPrefetching = false
             }
             draw()
-        }, btnTxt, 14, false, contentTop + scrollOffset + ly)
+        }, btnTxt, 14, false, hubContentTop + scrollOffset + ly)
     })
     y += levelCardH + 30
     
@@ -924,7 +925,7 @@ function drawSelectionCard(w) {
                 isPrefetching = false
             }
             draw()
-        }, btnTxt, 14, false, contentTop + scrollOffset + ty)
+        }, btnTxt, 14, false, hubContentTop + scrollOffset + ty)
     })
     y += topicCardH + 40
     
@@ -932,7 +933,7 @@ function drawSelectionCard(w) {
     drawButton(40, y, w - 80, 60, Theme.accent, '开始测试', '生成故事', true, () => {
         currentScene = 'game'
         startNewGame()
-    }, '#FFFFFF', 20, false, contentTop + scrollOffset + y)
+    }, '#FFFFFF', 20, false, hubContentTop + scrollOffset + y)
     
     return y + 100
 }
@@ -995,7 +996,7 @@ function drawLeaderboardCard(w) {
         drawButton(tx, y, subTabW, 40, btnBg, typeLabels[t], '', true, () => {
             rankType = t
             fetchLeaderboard() 
-        }, btnTxt, 14, false, contentTop + scrollOffset + y)
+        }, btnTxt, 14, false, hubContentTop + scrollOffset + y)
     })
     y += 60
     
