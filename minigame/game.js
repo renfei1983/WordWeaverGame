@@ -41,7 +41,7 @@ const context = canvas.getContext('2d')
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
-const BACKEND_VERSION = 'v1.2.0'
+const BACKEND_VERSION = 'v1.3.0'
 
 // --- Constants ---
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -66,8 +66,8 @@ const Theme = {
 // --- System Info & Layout ---
 const sysInfo = wx.getSystemInfoSync()
 const safeAreaTop = sysInfo.statusBarHeight || 20
-const headerHeight = 44
-const tabBarHeight = 50
+const headerHeight = 54 // Increased for better touch target and spacing
+const tabBarHeight = 60 // Increased for easier clicking
 const audioPlayerHeight = 90
 const contentTop = safeAreaTop + headerHeight + tabBarHeight
 
@@ -525,7 +525,8 @@ function drawWordWeaverHub(w, h) {
     context.fillRect(0, 0, w, safeAreaTop + headerHeight)
     
     // Back Button
-    drawButton(10, headerY + 6, 70, 32, 'transparent', '< Back', '', true, () => {
+    const backBtnH = 36
+    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Back', '', true, () => {
         currentScene = 'hub'
         draw()
     }, Theme.primary, 16, true)
@@ -533,7 +534,8 @@ function drawWordWeaverHub(w, h) {
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
     context.textAlign = 'center'
-    context.fillText('WordWeaver', w / 2, headerY + 22)
+    context.textBaseline = 'middle'
+    context.fillText('WordWeaver', w / 2, headerY + headerHeight/2)
 
     // Tabs
     const tabY = safeAreaTop + headerHeight
@@ -553,13 +555,15 @@ function drawWordWeaverHub(w, h) {
         context.fillStyle = isActive ? Theme.primary : Theme.textSub
         context.font = isActive ? 'bold 16px sans-serif' : '16px sans-serif'
         context.textAlign = 'center'
-        context.fillText(tab.label, x + tabW/2, tabY + 30)
+        context.textBaseline = 'middle'
+        context.fillText(tab.label, x + tabW/2, tabY + tabBarHeight/2)
         
         if (isActive) {
             context.fillStyle = Theme.primary
             context.fillRect(x + 10, tabY + tabBarHeight - 3, tabW - 20, 3)
         }
         
+        // Expanded touch area
         activeButtons.push({
             x: x, y: tabY, w: tabW, h: tabBarHeight,
             callback: () => {
@@ -769,7 +773,8 @@ function drawGameScene(w, h) {
   context.fillStyle = Theme.surface
   context.fillRect(0, 0, w, safeAreaTop + headerHeight)
   
-  drawButton(10, headerY + 6, 70, 32, 'transparent', '< Hub', '', true, () => {
+  const backBtnH = 36
+  drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Hub', '', true, () => {
     currentScene = 'wordweaver'
     hubTab = 'SELECTION'
     audioCtx.stop()
@@ -779,7 +784,8 @@ function drawGameScene(w, h) {
   context.fillStyle = Theme.textMain
   context.font = 'bold 18px sans-serif'
   context.textAlign = 'center'
-  context.fillText('WordWeaver', w / 2, headerY + 22)
+  context.textBaseline = 'middle'
+  context.fillText('WordWeaver', w / 2, headerY + headerHeight/2)
   
   context.fillStyle = Theme.border
   context.fillRect(0, safeAreaTop + headerHeight - 1, w, 1)
@@ -846,11 +852,8 @@ function drawTabBar(w, startY) {
     context.fillText(tab.label, x + tabW / 2, startY + tabBarHeight / 2)
     
     if (isActive) {
-      context.shadowBlur = 15
-      context.shadowColor = Theme.primary
       context.fillStyle = Theme.primary
       context.fillRect(x + 10, startY + tabBarHeight - 3, tabW - 20, 3)
-      context.shadowBlur = 0
     }
     
     activeButtons.push({
@@ -1041,10 +1044,43 @@ function drawQuizTab(w) {
   
   y += 20
   // Next / Skip Button
-  const btnLabel = (quizIndex < storyData.quiz.length - 1) ? 'Next >' : 'Finish'
-  drawButton(w - 120, y, 100, 44, Theme.primary, btnLabel, '', true, () => {
-      if (quizAnswered) nextQuestion()
-      else skipQuestion()
+  const btnW = (w - 60) / 2
+  const isLast = quizIndex === storyData.quiz.length - 1
+  
+  // Skip Button (Left)
+  if (!isLast) {
+      drawButton(20, y, btnW, 44, Theme.secondary, '跳过', '', true, () => {
+          skipQuestion()
+      }, Theme.textMain, 16, false, screenY)
+  }
+  
+  // Next/Finish Button (Right)
+  // If answered, show "Next" or "Finish"
+  // If not answered, show "Next" (which acts as check? No, user asked for skip)
+  // We'll show "下一题" (Next Question)
+  
+  const nextLabel = isLast ? '完成' : '下一题'
+  const nextBg = quizAnswered ? Theme.primary : Theme.primary // Always primary? Or disabled if not answered?
+  // User said "Can skip", so maybe Next is just Next.
+  // But typically Next implies "Submit" if not answered?
+  // Current logic: if answered next(), else skip().
+  // With separate buttons:
+  // Skip -> skipQuestion()
+  // Next -> if answered next(), else... toast "Please answer"?
+  
+  const rightBtnX = isLast ? (w - 100)/2 : (w - 20 - btnW)
+  const rightBtnW = isLast ? 100 : btnW
+  
+  drawButton(rightBtnX, y, rightBtnW, 44, Theme.primary, nextLabel, '', true, () => {
+      if (quizAnswered) {
+          if (isLast) finishQuiz()
+          else nextQuestion()
+      } else {
+          // If they click Next without answering, maybe they meant to skip?
+          // But we have a Skip button now.
+          // So show toast "Please select an answer or click Skip"
+          wx.showToast({ title: '请选择答案或点击跳过', icon: 'none' })
+      }
   }, Theme.textMain, 16, false, screenY)
   
   return y + 100
@@ -1052,10 +1088,7 @@ function drawQuizTab(w) {
 
 function drawAudioPlayer(w, y, h) {
   context.fillStyle = Theme.surface
-  context.shadowBlur = 10
-  context.shadowColor = 'rgba(0,0,0,0.5)'
   context.fillRect(0, y, w, h)
-  context.shadowBlur = 0
   
   // Progress Bar
   context.fillStyle = Theme.secondary
