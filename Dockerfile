@@ -16,10 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/ /app
 
 # Install any needed packages specified in requirements.txt
-# Using Tsinghua mirror for faster builds in China
-# Increased timeout to avoid network issues
+# Switch to Tencent Cloud mirror which is more stable in this environment
+# Or fallback to official PyPI if mirrors fail
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100
+    pip install --no-cache-dir -r requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple --default-timeout=100
 
 # Make port 80 available to the world outside this container
 EXPOSE 80
