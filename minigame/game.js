@@ -368,32 +368,30 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
         
         ;(async () => {
             try {
-                const res = await ai.streamText({
+                // New 2026 Interface: Use callbacks (onText, onFinish)
+                await ai.streamText({
                     data: {
+                        model: "hunyuan-lite", // Explicitly specify model version as per new docs
                         messages: [
                             { role: "system", content: "You are a helpful assistant that outputs raw JSON without markdown formatting." },
                             { role: "user", content: prompt }
                         ]
+                    },
+                    onText: (text) => {
+                        // text is the incremental chunk
+                        if (text) onChunk(text)
+                    },
+                    onFinish: (fullText) => {
+                        console.log('AI Generation Finished')
+                        if (onSuccess) onSuccess()
+                    },
+                    onError: (err) => {
+                        console.error('AI Generation Error Callback:', err)
+                        if (onFail) onFail(err)
                     }
                 })
-                
-                // Handle stream
-                // Assuming res.eventStream is an async iterable
-                if (res.eventStream) {
-                  for await (const event of res.eventStream) {
-                      if (event.data) {
-                           // Hunyuan stream usually returns delta content directly or in a structure
-                           // Adjust based on actual event structure. 
-                           // Often event.data is the text chunk.
-                           onChunk(event.data)
-                      }
-                  }
-                }
-                
-                if (onSuccess) onSuccess()
-                
             } catch (err) {
-                console.error('Hunyuan AI Error:', err)
+                console.error('Hunyuan AI Exception:', err)
                 if (onFail) onFail(err)
             }
         })()
