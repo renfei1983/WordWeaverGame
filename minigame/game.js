@@ -75,7 +75,7 @@ const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.7.1'
+const BACKEND_VERSION = 'v1.7.2'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -478,6 +478,18 @@ function login() {
   wx.login({
     success: async (res) => {
       const payload = { code: res.code || "cloud_mode", userInfo: null }
+      
+      const onLoginFail = () => {
+          wx.hideLoading()
+          // Fallback to Guest Mode if backend is not available
+          console.warn('Backend login failed, using Guest Mode')
+          user = { openid: 'guest_' + Math.random().toString(36).substr(2, 9) }
+          isLogin = true
+          wx.setStorageSync('user', user)
+          draw()
+          wx.showToast({ title: '访客模式', icon: 'none' })
+      }
+
       callApi('/login', 'POST', payload, (resp) => {
         wx.hideLoading()
         if (resp.statusCode === 200) {
@@ -488,16 +500,21 @@ function login() {
           draw()
           wx.showToast({ title: '登录成功' })
         } else {
-          wx.showToast({ title: '登录失败', icon: 'none' })
+          onLoginFail()
         }
       }, () => {
-        wx.hideLoading()
-        wx.showToast({ title: '网络错误', icon: 'none' })
+        onLoginFail()
       })
     },
     fail: () => {
       wx.hideLoading()
-      wx.showToast({ title: '微信登录失败', icon: 'none' })
+      // Fallback even if wx.login fails
+      console.warn('wx.login failed, using Guest Mode')
+      user = { openid: 'guest_' + Math.random().toString(36).substr(2, 9) }
+      isLogin = true
+      wx.setStorageSync('user', user)
+      draw()
+      wx.showToast({ title: '访客模式', icon: 'none' })
     }
   })
 }
