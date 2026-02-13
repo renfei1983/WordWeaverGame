@@ -1122,8 +1122,6 @@ function drawQuizTab(w) {
   })
   innerY += 20
   
-  const screenY = contentTop + scrollOffset + innerY
-  
   q.options.forEach(opt => {
     let bgColor = Theme.secondary // Default option bg (Ghost/Light Grey)
     let txtColor = Theme.textMain
@@ -1145,7 +1143,7 @@ function drawQuizTab(w) {
     // Prompt: "Secondary Button: Light Gray background (#E4E7ED) + Dark Gray text"
     // So Theme.secondary is fine.
     
-    drawButton(40, innerY, w - 80, 50, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, screenY, borderColor)
+    drawButton(40, innerY, w - 80, 50, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, contentTop + scrollOffset + innerY, borderColor)
     
     innerY += 65
   })
@@ -1160,7 +1158,7 @@ function drawQuizTab(w) {
   if (!isLast) {
       drawButton(40, innerY, btnW, 44, 'transparent', 'Skip', '', true, () => {
           skipQuestion()
-      }, Theme.textSub, 16, false, screenY, Theme.border) // Ghost button with border
+      }, Theme.textSub, 16, false, contentTop + scrollOffset + innerY, Theme.border) // Ghost button with border
   }
   
   const nextLabel = isLast ? 'Finish' : 'Next'
@@ -1175,7 +1173,7 @@ function drawQuizTab(w) {
       } else {
           wx.showToast({ title: 'Please select an answer', icon: 'none' })
       }
-  }, Theme.primaryTxt, 16, false, screenY)
+  }, Theme.primaryTxt, 16, false, contentTop + scrollOffset + innerY)
   
   return y + totalH + 40
 }
