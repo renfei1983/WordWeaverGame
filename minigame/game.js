@@ -757,6 +757,7 @@ function drawLeaderboardCard(w) {
     
     // Sub-tabs
     const types = ['daily', 'weekly', 'total']
+    const typeLabels = { 'daily': '日榜', 'weekly': '周榜', 'total': '总榜' }
     const subTabW = (w - 40) / 3
     
     types.forEach((t, i) => {
@@ -765,13 +766,10 @@ function drawLeaderboardCard(w) {
         const btnBg = isSel ? Theme.primary : Theme.secondary
         const btnTxt = isSel ? Theme.primaryTxt : Theme.secondaryTxt
         
-        drawButton(tx, y, subTabW, 40, btnBg, t.toUpperCase(), '', true, () => {
+        drawButton(tx, y, subTabW, 40, btnBg, typeLabels[t], '', true, () => {
             rankType = t
-            // fetchLeaderboard() // Already fetched? Or trigger fetch
-            // Ideally we should fetch if not cached or always fetch on switch
-            // But let's keep existing logic, just update UI
-            // Assuming logic handles fetch elsewhere or this is just UI
-        }, btnTxt, 12, false, contentTop + scrollOffset + y)
+            fetchLeaderboard() 
+        }, btnTxt, 14, false, contentTop + scrollOffset + y)
     })
     y += 60
     
@@ -792,10 +790,10 @@ function drawLeaderboardCard(w) {
     context.fillStyle = Theme.textSub
     context.font = '12px sans-serif'
     context.textAlign = 'left'
-    context.fillText('RANK', 40, innerY)
-    context.fillText('USER', 90, innerY)
+    context.fillText('排名', 40, innerY)
+    context.fillText('用户', 90, innerY)
     context.textAlign = 'right'
-    context.fillText('SCORE', w - 40, innerY)
+    context.fillText('得分', w - 40, innerY)
     
     context.fillStyle = Theme.border
     context.fillRect(40, innerY + 10, w - 80, 1) // Separator inside card
@@ -806,14 +804,14 @@ function drawLeaderboardCard(w) {
         context.fillStyle = Theme.textSub
         context.font = '16px sans-serif'
         context.textAlign = 'center'
-        context.fillText('Loading rankings...', w/2, innerY + 40)
+        context.fillText('加载排名中...', w/2, innerY + 40)
         return y + totalH + 20
     }
 
     if (leaderboardData.length === 0) {
         context.fillStyle = Theme.textSub
         context.textAlign = 'center'
-        context.fillText('No data available', w/2, innerY + 40)
+        context.fillText('暂无数据', w/2, innerY + 40)
         return y + totalH + 20
     }
     
