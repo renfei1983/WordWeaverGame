@@ -73,10 +73,10 @@ const USE_CLOUD = true
 const USE_STREAM = false // Disable streaming (DNS issues), fallback to Cloud Container
 // TODO: Replace with your Cloud Run Public Access URL for streaming
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.5.5'
+const BACKEND_VERSION = 'v1.5.6'
 
 // --- Constants ---
-const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
+const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
 const TOPICS = ['Daily Life', 'Science', 'Art', 'Harry Potter', 'Avengers', 'Minecraft']
 
 // --- Theme Configuration (Modern Minimalism - Revamped) ---
@@ -102,7 +102,7 @@ const safeAreaTop = sysInfo.statusBarHeight || 20
 const headerHeight = 60 // Increased for better touch target and spacing
 const tabBarHeight = 60 // Increased for easier clicking
 const audioPlayerHeight = 90
-const contentTop = safeAreaTop + headerHeight + tabBarHeight
+const contentTop = safeAreaTop + headerHeight + tabBarHeight + 30 // Matches contentY (header+10 + tab+20)
 
 // --- State Management ---
 let user = null
