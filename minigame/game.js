@@ -205,7 +205,18 @@ let activeButtons = [] // {x, y, w, h, callback, id}
 function warmupBackend() {
   if (isWarmingUp) return
   isWarmingUp = true
-  callApi('/', 'GET', null, () => {}, () => {})
+  
+  if (USE_CLOUD && wx.cloud) {
+      // Warm up the cloud function
+      wx.cloud.callFunction({
+          name: 'wordweaver',
+          data: { action: 'login' }
+      }).then(() => {
+          console.log('Cloud Function Warmed Up')
+      }).catch(e => {
+          // Ignore errors during warmup
+      })
+  }
 }
 
 function callApi(path, method, data, success, fail) {
