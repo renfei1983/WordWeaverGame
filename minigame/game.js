@@ -68,14 +68,14 @@ const setInterval = GameGlobal.setInterval || window.setInterval || function(cb,
 const clearInterval = GameGlobal.clearInterval || window.clearInterval || function() {}
 
 // --- Configuration ---
-const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
+const CLOUD_ENV = 'cloudbase-1g6a925fc4f71607'
 const USE_CLOUD = true
 const USE_STREAM = true // Enable streaming
 const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.7.0'
+const BACKEND_VERSION = 'v1.7.1'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
