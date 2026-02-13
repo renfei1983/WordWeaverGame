@@ -98,6 +98,7 @@ let showTranslation = false
 // Quiz State
 let quizIndex = 0
 let score = 0 // Local feedback score (10 pts/question)
+let correctCount = 0 // Track number of correct answers
 let quizSelectedOption = null
 let quizAnswered = false
 
@@ -306,6 +307,7 @@ function startNewGame() {
   storyData = null
   quizIndex = 0
   score = 0
+  correctCount = 0
   quizSelectedOption = null
   quizAnswered = false
   isSubmitting = false
@@ -345,6 +347,7 @@ function handleAnswer(option) {
   const currentQ = storyData.quiz[quizIndex]
   if (option === currentQ.answer) {
     score += 10
+    correctCount++
   }
   draw()
 }
@@ -364,12 +367,12 @@ function skipQuestion() {
     // Treat as finished if it's the last one, or just go next
     // User said "Skip this question"
     if (quizIndex < storyData.quiz.length - 1) {
-        quizIndex++
-        quizSelectedOption = null
-        quizAnswered = false
-        draw()
+      quizIndex++
+      quizSelectedOption = null
+      quizAnswered = false
+      draw()
     } else {
-        finishQuiz()
+      finishQuiz()
     }
 }
 
@@ -377,9 +380,23 @@ function finishQuiz() {
     if (isSubmitting) return
     isSubmitting = true
     
-    wx.showToast({ title: '完成! +5积分', icon: 'success' })
+    let earnedPoints = 0
+    let msg = '完成!'
+    
+    // Only award 5 points if ALL questions are correct (assuming 3 questions usually)
+    // Or just if correctCount === totalQuestions
+    if (storyData && storyData.quiz && correctCount === storyData.quiz.length) {
+        earnedPoints = 5
+        msg = '全对! +5积分'
+    } else {
+        msg = `完成! 答对 ${correctCount}/${storyData.quiz.length} 题`
+    }
+
+    wx.showToast({ title: msg, icon: earnedPoints > 0 ? 'success' : 'none' })
     saveRecord()
-    submitScore(5) // Award 5 points for completing the set
+    if (earnedPoints > 0) {
+        submitScore(earnedPoints) 
+    }
     
     // Return to hub after delay
     setTimeout(() => {
@@ -509,14 +526,14 @@ function drawMainHub(w, h) {
   const btnH = 90
   const startY = titleY + 140
   
-  drawButton(30, startY, btnW, btnH, Theme.primary, 'WordWeaver', 'Interactive Story & Quiz', true, () => {
+  drawButton(30, startY, btnW, btnH, Theme.primary, 'WordWeaver', '互动故事 & 测验', true, () => {
     if (!isLogin) { login(); return }
     currentScene = 'wordweaver'
     hubTab = 'SELECTION'
     draw()
   }, Theme.primaryTxt, 22)
 
-  drawButton(30, startY + 110, btnW, btnH, Theme.secondary, 'MathMind', 'Coming Soon', false, null, Theme.secondaryTxt, 22)
+  drawButton(30, startY + 110, btnW, btnH, Theme.secondary, 'MathMind', '敬请期待', false, null, Theme.secondaryTxt, 22)
 }
 
 function drawWordWeaverHub(w, h) {
@@ -533,7 +550,7 @@ function drawWordWeaverHub(w, h) {
     
     // Back Button
     const backBtnH = 36
-    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Hub', '', true, () => {
+    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< 主页', '', true, () => {
         currentScene = 'hub'
         draw()
     }, Theme.primary, 16, true, null, Theme.primary) // Ghost button style
@@ -547,9 +564,9 @@ function drawWordWeaverHub(w, h) {
     // Tabs
     const tabY = safeAreaTop + headerHeight
     const tabs = [
-        { key: 'SELECTION', label: 'Start' },
-        { key: 'HISTORY', label: 'History' },
-        { key: 'RANK', label: 'Rank' }
+        { key: 'SELECTION', label: '开始' },
+        { key: 'HISTORY', label: '历史' },
+        { key: 'RANK', label: '排名' }
     ]
     const tabW = w / 3
     
@@ -623,7 +640,7 @@ function drawSelectionCard(w) {
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
     context.textAlign = 'left'
-    context.fillText('Select Level', 20, y)
+    context.fillText('选择等级', 20, y)
     y += 30
     
     const gridCols = 2
@@ -659,7 +676,7 @@ function drawSelectionCard(w) {
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
     context.textAlign = 'left'
-    context.fillText('Select Topic', 20, y)
+    context.fillText('选择主题', 20, y)
     y += 30
     
     const topicRows = Math.ceil(TOPICS.length / gridCols)
@@ -686,7 +703,7 @@ function drawSelectionCard(w) {
     y += topicCardH + 40
     
     // Start Button
-    drawButton(40, y, w - 80, 60, Theme.accent, 'Start Quiz', 'Create Story', true, () => {
+    drawButton(40, y, w - 80, 60, Theme.accent, '开始测试', '生成故事', true, () => {
         currentScene = 'game'
         startNewGame()
     }, '#FFFFFF', 20, false, contentTop + scrollOffset + y)
@@ -701,14 +718,14 @@ function drawHistoryCard(w) {
         context.fillStyle = Theme.textSub
         context.font = '16px sans-serif'
         context.textAlign = 'center'
-        context.fillText('Loading history...', w/2, y + 50)
+        context.fillText('加载历史中...', w/2, y + 50)
         return y + 100
     }
 
     if (historyData.length === 0) {
         context.fillStyle = Theme.textSub
         context.textAlign = 'center'
-        context.fillText('No history yet', w/2, y + 50)
+        context.fillText('暂无历史记录', w/2, y + 50)
         return y + 100
     }
     
@@ -845,18 +862,43 @@ function drawGameScene(w, h) {
   
   // Back Button
   const backBtnH = 36
-  drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Hub', '', true, () => {
-    currentScene = 'wordweaver'
-    hubTab = 'SELECTION'
-    audioCtx.stop()
-    draw()
+  drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< 主页', '', true, () => {
+    // Confirm exit?
+    wx.showModal({
+        title: '退出',
+        content: '确定要退出当前游戏吗？进度将不会保存。',
+        confirmText: '退出',
+        cancelText: '取消',
+        success: (res) => {
+            if (res.confirm) {
+                currentScene = 'wordweaver'
+                draw()
+            }
+        }
+    })
+  }, Theme.primary, 16, true, null, Theme.primary)
+
+  // Skip Button (Right Side)
+  const skipBtnW = 80
+  drawButton(w - 10 - skipBtnW, headerY + (headerHeight - backBtnH)/2, skipBtnW, backBtnH, 'transparent', '>> 跳过', '', true, () => {
+      wx.showModal({
+          title: '跳过',
+          content: '确定要跳过当前题目并进入下一组吗？',
+          confirmText: '跳过',
+          cancelText: '取消',
+          success: (res) => {
+              if (res.confirm) {
+                  startNewGame()
+              }
+          }
+      })
   }, Theme.primary, 16, true, null, Theme.primary)
   
   context.fillStyle = Theme.textMain
   context.font = 'bold 18px sans-serif'
   context.textAlign = 'center'
   context.textBaseline = 'middle'
-  context.fillText('WordWeaver', w / 2, headerY + headerHeight/2)
+  context.fillText(selectedTopic, w / 2, headerY + headerHeight/2)
   
   // Removed border line in favor of shadow
 
@@ -902,10 +944,10 @@ function drawGameScene(w, h) {
 
 function drawTabBar(w, startY) {
   const tabs = [
-    { key: 'STORY', label: 'Story' },
-    { key: 'WORDS', label: 'Words' },
-    { key: 'TRANSLATION', label: 'CN' },
-    { key: 'QUIZ', label: 'Quiz' }
+    { key: 'STORY', label: '故事' },
+    { key: 'WORDS', label: '单词' },
+    { key: 'TRANSLATION', label: '翻译' },
+    { key: 'QUIZ', label: '测试' }
   ]
   const tabW = w / tabs.length
   
@@ -950,10 +992,10 @@ function drawLoading(w, h) {
   context.fillStyle = Theme.primary
   context.font = 'bold 20px sans-serif'
   context.textAlign = 'center'
-  context.fillText('Generating Story...', w / 2, h / 2 - 20)
+  context.fillText('正在生成故事...', w / 2, h / 2 - 20)
   context.fillStyle = Theme.textSub
   context.font = '14px sans-serif'
-  context.fillText('AI Magic in progress...', w / 2, h / 2 + 10)
+  context.fillText('AI 魔法施展中...', w / 2, h / 2 + 10)
 }
 
 function drawError(w, h) {
@@ -961,7 +1003,7 @@ function drawError(w, h) {
   context.fillStyle = Theme.error
   context.font = 'bold 18px sans-serif'
   context.textAlign = 'center'
-  context.fillText('Failed to Generate', w / 2, h / 2 - 40)
+  context.fillText('生成失败', w / 2, h / 2 - 40)
   
   const lines = wrapText(context, msg, w - 60, 14)
   context.fillStyle = Theme.textSub
@@ -971,7 +1013,7 @@ function drawError(w, h) {
   
   const btnY = h / 2 + 60
   const screenY = contentTop + scrollOffset + btnY
-  drawButton(w/2 - 60, btnY, 120, 44, Theme.primary, 'Retry', '', true, () => startNewGame(), Theme.textMain, 16, false, screenY)
+  drawButton(w/2 - 60, btnY, 120, 44, Theme.primary, '重试', '', true, () => startNewGame(), Theme.textMain, 16, false, screenY)
 }
 
 function drawStoryTab(w) {
@@ -994,7 +1036,7 @@ function drawStoryTab(w) {
   context.fillStyle = Theme.primary
   context.font = 'bold 14px sans-serif'
   context.textAlign = 'left'
-  context.fillText(`Topic: ${selectedTopic} | Level: ${selectedLevel}`, 40, innerY)
+  context.fillText(`主题: ${selectedTopic} | 等级: ${selectedLevel}`, 40, innerY)
   innerY += 40
   
   context.textAlign = 'left'
@@ -1027,7 +1069,7 @@ function drawWordsTab(w) {
   context.textAlign = 'left'
   context.fillStyle = Theme.textMain
   context.font = 'bold 20px sans-serif'
-  context.fillText('Keywords', 20, y)
+  context.fillText('关键词', 20, y)
   y += 40
   
   if (storyData.translation_map) {
@@ -1057,7 +1099,7 @@ function drawTranslationTab(w) {
   const btnTxt = showTranslation ? Theme.secondaryTxt : '#FFFFFF'
   
   drawButton(20, y, 160, btnH, btnBg, 
-    showTranslation ? 'Hide' : 'Show Translation', '', true, 
+    showTranslation ? '隐藏翻译' : '显示翻译', '', true, 
     () => { showTranslation = !showTranslation; draw() }, btnTxt, 16, false, screenY)
     
   y += 60
@@ -1082,7 +1124,7 @@ function drawTranslationTab(w) {
     context.fillStyle = Theme.textSub
     context.font = 'italic 16px sans-serif'
     context.textAlign = 'center'
-    context.fillText('Tap button to see translation', w/2, y + 100)
+    context.fillText('点击按钮查看翻译', w/2, y + 100)
     y += 200
   }
   return y + 20
@@ -1109,7 +1151,7 @@ function drawQuizTab(w) {
   context.fillStyle = Theme.textSub
   context.font = '14px sans-serif'
   context.textAlign = 'center'
-  context.fillText(`Question ${quizIndex + 1} of ${storyData.quiz.length}`, w/2, innerY)
+  context.fillText(`第 ${quizIndex + 1} / ${storyData.quiz.length} 题`, w/2, innerY)
   innerY += 40
   
   context.fillStyle = Theme.textMain
@@ -1156,12 +1198,12 @@ function drawQuizTab(w) {
   
   // Skip Button (Left)
   if (!isLast) {
-      drawButton(40, innerY, btnW, 44, 'transparent', 'Skip', '', true, () => {
+      drawButton(40, innerY, btnW, 44, 'transparent', '跳过', '', true, () => {
           skipQuestion()
       }, Theme.textSub, 16, false, contentTop + scrollOffset + innerY, Theme.border) // Ghost button with border
   }
   
-  const nextLabel = isLast ? 'Finish' : 'Next'
+  const nextLabel = isLast ? '完成' : '下一题'
   
   const rightBtnX = isLast ? (w - 140)/2 + 20 : (40 + btnW + 20)
   const rightBtnW = isLast ? 100 : btnW
@@ -1171,7 +1213,7 @@ function drawQuizTab(w) {
           if (isLast) finishQuiz()
           else nextQuestion()
       } else {
-          wx.showToast({ title: 'Please select an answer', icon: 'none' })
+          wx.showToast({ title: '请选择一个答案', icon: 'none' })
       }
   }, Theme.primaryTxt, 16, false, contentTop + scrollOffset + innerY)
   
