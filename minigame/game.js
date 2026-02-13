@@ -876,9 +876,9 @@ function drawGameScene(w, h) {
     })
   }, Theme.primary, 16, true, null, Theme.primary)
 
-  // Skip Button (Right Side)
-  const skipBtnW = 80
-  drawButton(w - 10 - skipBtnW, headerY + (headerHeight - backBtnH)/2, skipBtnW, backBtnH, 'transparent', '>> 跳过', '', true, () => {
+  // Skip Button (Next to Hub/Back button)
+  const skipBtnW = 70
+  drawButton(100, headerY + (headerHeight - backBtnH)/2, skipBtnW, backBtnH, 'transparent', '>> 跳过', '', true, () => {
       wx.showModal({
           title: '跳过',
           content: '确定要跳过当前题目并进入下一组吗？',
@@ -1317,12 +1317,37 @@ function wrapText(context, text, maxWidth, fontSize) {
     const words = para.split(' ')
     
     for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' '
+      const word = words[n]
+      const testLine = line + (line === '' ? '' : ' ') + word
       const metrics = context.measureText(testLine)
       const testWidth = metrics.width
-      if (testWidth > maxWidth && n > 0) {
-        lines.push(line)
-        line = words[n] + ' '
+      
+      if (testWidth > maxWidth) {
+        // Check if the word itself is longer than maxWidth (e.g. long Chinese string)
+        if (context.measureText(word).width > maxWidth) {
+            // If we have content in buffer, flush it
+            if (line !== '') {
+                lines.push(line)
+                line = ''
+            }
+            
+            // Break long word char by char
+            let tempLine = ''
+            for (let i = 0; i < word.length; i++) {
+                const char = word[i]
+                if (context.measureText(tempLine + char).width > maxWidth) {
+                    lines.push(tempLine)
+                    tempLine = char
+                } else {
+                    tempLine += char
+                }
+            }
+            line = tempLine
+        } else {
+            // Normal word wrap
+            lines.push(line)
+            line = word
+        }
       } else {
         line = testLine
       }
