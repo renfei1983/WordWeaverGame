@@ -31,7 +31,7 @@ if (wx.setInnerAudioOption) {
     obeyMuteSwitch: false,
     speakerOn: true,
     success: () => console.log('Global Audio Option: Mute Disabled'),
-    fail: (e) => console.error('Global Audio Option Failed', e)
+    fail: (e) => console.warn('Global Audio Option Failed (Expected on DevTools)', e)
   })
 }
 
