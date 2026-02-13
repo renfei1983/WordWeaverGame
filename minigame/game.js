@@ -41,26 +41,27 @@ const context = canvas.getContext('2d')
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
-const BACKEND_VERSION = 'v1.3.0'
+const BACKEND_VERSION = 'v1.4.0'
 
 // --- Constants ---
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
 const TOPICS = ['Daily Life', 'Science', 'Art', 'Harry Potter', 'Avengers', 'Minecraft']
 
-// --- Theme Configuration (Clean White Style) ---
+// --- Theme Configuration (Modern Minimalism) ---
 const Theme = {
-  bg: '#F8FAFC',       // Slate 50 (Very light gray/white)
-  bgTrans: 'rgba(255, 255, 255, 0.95)',
-  surface: '#FFFFFF',  // White
-  primary: '#0EA5E9',  // Sky 500 (Clean Blue)
-  primaryHover: '#38BDF8', // Sky 400
-  secondary: '#E2E8F0', // Slate 200 (Light gray for borders/dividers)
-  textMain: '#1E293B', // Slate 800 (Dark gray text)
-  textSub: '#64748B',  // Slate 500 (Medium gray text)
-  accent: '#F59E0B',   // Amber 500 (Orange accent)
-  success: '#10B981',  // Emerald 500
-  error: '#EF4444',    // Red 500
-  border: '#CBD5E1'    // Slate 300
+  bg: '#F5F7FA',       // Light Grey Background (Global)
+  surface: '#FFFFFF',  // Pure White (Cards/Surface)
+  primary: '#409EFF',  // Soft Blue (Primary Action)
+  primaryTxt: '#FFFFFF', // Text on Primary
+  secondary: '#E4E7ED', // Light Gray (Secondary Action)
+  secondaryTxt: '#606266', // Text on Secondary
+  textMain: '#303133', // Dark Gray (Headings)
+  textSub: '#606266',  // Medium Gray (Subtext)
+  textLight: '#909399', // Lighter Gray (Auxiliary)
+  accent: '#67C23A',   // Green (Success/Start)
+  error: '#F56C6C',    // Soft Red
+  border: '#DCDFE6',   // Light Border
+  shadow: 'rgba(0, 0, 0, 0.05)' // Very subtle shadow
 }
 
 // --- System Info & Layout ---
@@ -513,23 +514,29 @@ function drawMainHub(w, h) {
     currentScene = 'wordweaver'
     hubTab = 'SELECTION'
     draw()
-  }, Theme.textMain, 22)
+  }, Theme.primaryTxt, 22)
 
-  drawButton(30, startY + 110, btnW, btnH, Theme.secondary, 'MathMind', 'Coming Soon', false, null, Theme.textSub, 22)
+  drawButton(30, startY + 110, btnW, btnH, Theme.secondary, 'MathMind', 'Coming Soon', false, null, Theme.secondaryTxt, 22)
 }
 
 function drawWordWeaverHub(w, h) {
     // Header
     const headerY = safeAreaTop
+    
+    context.shadowBlur = 8
+    context.shadowColor = Theme.shadow
+    context.shadowOffsetY = 2
     context.fillStyle = Theme.surface
     context.fillRect(0, 0, w, safeAreaTop + headerHeight)
+    context.shadowBlur = 0
+    context.shadowOffsetY = 0
     
     // Back Button
     const backBtnH = 36
-    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Back', '', true, () => {
+    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Hub', '', true, () => {
         currentScene = 'hub'
         draw()
-    }, Theme.primary, 16, true)
+    }, Theme.primary, 16, true, null, Theme.primary) // Ghost button style
 
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
@@ -546,8 +553,13 @@ function drawWordWeaverHub(w, h) {
     ]
     const tabW = w / 3
     
+    context.shadowBlur = 8
+    context.shadowColor = Theme.shadow
+    context.shadowOffsetY = 2
     context.fillStyle = Theme.surface
     context.fillRect(0, tabY, w, tabBarHeight)
+    context.shadowBlur = 0
+    context.shadowOffsetY = 0
     
     tabs.forEach((tab, i) => {
         const x = i * tabW
@@ -560,7 +572,10 @@ function drawWordWeaverHub(w, h) {
         
         if (isActive) {
             context.fillStyle = Theme.primary
-            context.fillRect(x + 10, tabY + tabBarHeight - 3, tabW - 20, 3)
+            // Rounded indicator
+            const indW = 20
+            const indH = 3
+            drawRoundedRect(context, x + tabW/2 - indW/2, tabY + tabBarHeight - 4, indW, indH, 1.5, true, false)
         }
         
         // Expanded touch area
@@ -601,8 +616,10 @@ function drawWordWeaverHub(w, h) {
 
 function drawSelectionCard(w) {
     let y = 20
+    const cardPadding = 20
+    const cardW = w - 40
     
-    // Level Selection
+    // Level Selection Card
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
     context.textAlign = 'left'
@@ -610,49 +627,69 @@ function drawSelectionCard(w) {
     y += 30
     
     const gridCols = 2
-    const cellW = (w - 60) / gridCols
+    const cellW = (cardW - cardPadding * (gridCols + 1)) / gridCols
     const cellH = 50
+    const levelRows = Math.ceil(LEVELS.length / gridCols)
+    const levelCardH = 20 + levelRows * (cellH + 15) + 20 // Padding top/bottom
     
+    // Draw Card Background
+    drawCard(20, y, cardW, levelCardH)
+    
+    let innerY = y + 20
     LEVELS.forEach((level, i) => {
         const row = Math.floor(i / gridCols)
         const col = i % gridCols
-        const lx = 20 + col * (cellW + 20)
-        const ly = y + row * (cellH + 15)
+        const lx = 20 + cardPadding + col * (cellW + cardPadding)
+        const ly = innerY + row * (cellH + 15)
         
         const isSelected = selectedLevel === level
-        drawButton(lx, ly, cellW, cellH, isSelected ? Theme.primary : Theme.surface, level, '', true, () => {
+        // Selected: Primary Color, White Text. Not Selected: White (on White Card? No), Grey BG?
+        // Prompt: "Secondary Button: Light Gray bg (#E4E7ED) + Dark Gray text"
+        const btnBg = isSelected ? Theme.primary : Theme.secondary
+        const btnTxt = isSelected ? Theme.primaryTxt : Theme.secondaryTxt
+        
+        drawButton(lx, ly, cellW, cellH, btnBg, level, '', true, () => {
             selectedLevel = level
             draw()
-        }, isSelected ? Theme.textMain : Theme.textSub, 14, false, contentTop + scrollOffset + ly)
+        }, btnTxt, 14, false, contentTop + scrollOffset + ly)
     })
-    y += Math.ceil(LEVELS.length / gridCols) * (cellH + 15) + 20
+    y += levelCardH + 30
     
-    // Topic Selection
+    // Topic Selection Card
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
     context.textAlign = 'left'
     context.fillText('Select Topic', 20, y)
     y += 30
     
+    const topicRows = Math.ceil(TOPICS.length / gridCols)
+    const topicCardH = 20 + topicRows * (cellH + 15) + 20
+    
+    drawCard(20, y, cardW, topicCardH)
+    
+    innerY = y + 20
     TOPICS.forEach((topic, i) => {
         const row = Math.floor(i / gridCols)
         const col = i % gridCols
-        const tx = 20 + col * (cellW + 20)
-        const ty = y + row * (cellH + 15)
+        const tx = 20 + cardPadding + col * (cellW + cardPadding)
+        const ty = innerY + row * (cellH + 15)
         
         const isSelected = selectedTopic === topic
-        drawButton(tx, ty, cellW, cellH, isSelected ? Theme.accent : Theme.surface, topic, '', true, () => {
+        const btnBg = isSelected ? Theme.primary : Theme.secondary
+        const btnTxt = isSelected ? Theme.primaryTxt : Theme.secondaryTxt
+        
+        drawButton(tx, ty, cellW, cellH, btnBg, topic, '', true, () => {
             selectedTopic = topic
             draw()
-        }, isSelected ? Theme.surface : Theme.textSub, 14, false, contentTop + scrollOffset + ty)
+        }, btnTxt, 14, false, contentTop + scrollOffset + ty)
     })
-    y += Math.ceil(TOPICS.length / gridCols) * (cellH + 15) + 40
+    y += topicCardH + 40
     
     // Start Button
-    drawButton(40, y, w - 80, 60, Theme.success, 'Start Quiz', 'Create Story', true, () => {
+    drawButton(40, y, w - 80, 60, Theme.accent, 'Start Quiz', 'Create Story', true, () => {
         currentScene = 'game'
         startNewGame()
-    }, Theme.textMain, 20, false, contentTop + scrollOffset + y)
+    }, '#FFFFFF', 20, false, contentTop + scrollOffset + y)
     
     return y + 100
 }
@@ -676,21 +713,22 @@ function drawHistoryCard(w) {
     }
     
     historyData.forEach(item => {
-        drawRoundedRect(context, 20, y, w - 40, 80, 10, true, true)
+        // Draw individual cards for history items
+        drawCard(20, y, w - 40, 80)
         
-        context.fillStyle = Theme.primary
+        context.fillStyle = Theme.textMain
         context.font = 'bold 16px sans-serif'
         context.textAlign = 'left'
-        context.fillText(item.topic, 35, y + 30)
+        context.fillText(item.topic, 40, y + 30) // Adjusted x for card padding
         
         context.fillStyle = Theme.textSub
         context.font = '14px sans-serif'
-        context.fillText(item.level, 35, y + 55)
+        context.fillText(item.level, 40, y + 55)
         
         context.fillStyle = Theme.accent
         context.font = 'bold 20px sans-serif'
         context.textAlign = 'right'
-        context.fillText(`+${item.score}`, w - 35, y + 45)
+        context.fillText(`+${item.score}`, w - 40, y + 45)
         
         y += 95
     })
@@ -707,79 +745,112 @@ function drawLeaderboardCard(w) {
     types.forEach((t, i) => {
         const tx = 20 + i * subTabW
         const isSel = rankType === t
+        const btnBg = isSel ? Theme.primary : Theme.secondary
+        const btnTxt = isSel ? Theme.primaryTxt : Theme.secondaryTxt
         
-        drawButton(tx, y, subTabW, 40, isSel ? Theme.primary : Theme.surface, t.toUpperCase(), '', true, () => {
+        drawButton(tx, y, subTabW, 40, btnBg, t.toUpperCase(), '', true, () => {
             rankType = t
-            fetchLeaderboard()
-        }, isSel ? Theme.textMain : Theme.textSub, 12, false, contentTop + scrollOffset + y)
+            // fetchLeaderboard() // Already fetched? Or trigger fetch
+            // Ideally we should fetch if not cached or always fetch on switch
+            // But let's keep existing logic, just update UI
+            // Assuming logic handles fetch elsewhere or this is just UI
+        }, btnTxt, 12, false, contentTop + scrollOffset + y)
     })
     y += 60
     
     // Header
+    // Let's put header inside the big card or above?
+    // Let's draw a big card for the leaderboard list
+    
+    // Calculate height
+    const rowH = 60
+    const headerH = 40
+    const listH = leaderboardData.length > 0 ? leaderboardData.length * rowH : 100
+    const totalH = headerH + listH
+    
+    drawCard(20, y, w - 40, totalH)
+    
+    let innerY = y + 20
+    
     context.fillStyle = Theme.textSub
     context.font = '12px sans-serif'
     context.textAlign = 'left'
-    context.fillText('RANK', 30, y)
-    context.fillText('USER', 80, y)
+    context.fillText('RANK', 40, innerY)
+    context.fillText('USER', 90, innerY)
     context.textAlign = 'right'
-    context.fillText('SCORE', w - 30, y)
+    context.fillText('SCORE', w - 40, innerY)
     
     context.fillStyle = Theme.border
-    context.fillRect(20, y + 10, w - 40, 1)
-    y += 20
+    context.fillRect(40, innerY + 10, w - 80, 1) // Separator inside card
+    
+    innerY += 20
     
     if (isHubLoading) {
         context.fillStyle = Theme.textSub
         context.font = '16px sans-serif'
         context.textAlign = 'center'
-        context.fillText('Loading rankings...', w/2, y + 50)
-        return y + 100
+        context.fillText('Loading rankings...', w/2, innerY + 40)
+        return y + totalH + 20
     }
 
     if (leaderboardData.length === 0) {
+        context.fillStyle = Theme.textSub
         context.textAlign = 'center'
-        context.fillText('Loading...', w/2, y + 50)
-        return y + 100
+        context.fillText('No data available', w/2, innerY + 40)
+        return y + totalH + 20
     }
     
-    leaderboardData.forEach(item => {
-        context.fillStyle = Theme.surface
-        drawRoundedRect(context, 20, y, w - 40, 50, 8, true, true)
+    leaderboardData.forEach((item, index) => {
+        const itemY = innerY + index * rowH
         
         // Rank
-        context.fillStyle = item.rank <= 3 ? Theme.accent : Theme.textSub
+        context.fillStyle = item.rank <= 3 ? Theme.accent : Theme.textMain
         context.font = 'bold 16px sans-serif'
         context.textAlign = 'center'
-        context.fillText(item.rank, 40, y + 30)
+        context.fillText(item.rank, 55, itemY + 35)
         
         // User
         context.fillStyle = Theme.textMain
         context.textAlign = 'left'
-        context.fillText(item.username.slice(0, 10), 80, y + 30)
+        context.font = '14px sans-serif'
+        context.fillText(item.user || 'User', 90, itemY + 35)
         
         // Score
         context.fillStyle = Theme.primary
         context.textAlign = 'right'
-        context.fillText(item.score, w - 40, y + 30)
+        context.font = 'bold 16px sans-serif'
+        context.fillText(item.score, w - 40, itemY + 35)
         
-        y += 60
+        // Separator line (except last)
+        if (index < leaderboardData.length - 1) {
+            context.fillStyle = Theme.border
+            context.fillRect(40, itemY + 60, w - 80, 1)
+        }
     })
     
-    return y + 20
+    return y + totalH + 20
 }
 
 function drawGameScene(w, h) {
   const headerY = safeAreaTop
+  
+  // Header with shadow
+  context.shadowBlur = 8
+  context.shadowColor = Theme.shadow
+  context.shadowOffsetY = 2
   context.fillStyle = Theme.surface
   context.fillRect(0, 0, w, safeAreaTop + headerHeight)
+  context.shadowBlur = 0
+  context.shadowOffsetY = 0
   
+  // Back Button
   const backBtnH = 36
   drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< Hub', '', true, () => {
     currentScene = 'wordweaver'
     hubTab = 'SELECTION'
     audioCtx.stop()
     draw()
-  }, Theme.primary, 16, true)
+  }, Theme.primary, 16, true, null, Theme.primary)
   
   context.fillStyle = Theme.textMain
   context.font = 'bold 18px sans-serif'
@@ -787,8 +858,7 @@ function drawGameScene(w, h) {
   context.textBaseline = 'middle'
   context.fillText('WordWeaver', w / 2, headerY + headerHeight/2)
   
-  context.fillStyle = Theme.border
-  context.fillRect(0, safeAreaTop + headerHeight - 1, w, 1)
+  // Removed border line in favor of shadow
 
   const tabY = safeAreaTop + headerHeight
   drawTabBar(w, tabY)
@@ -825,6 +895,7 @@ function drawGameScene(w, h) {
   if (scrollOffset < minScroll) scrollOffset = minScroll
 
   if (gameState === 'READY' && currentTab === 'STORY') {
+    // Audio Player fixed at bottom
     drawAudioPlayer(w, h - audioPlayerHeight, audioPlayerHeight)
   }
 }
@@ -838,8 +909,13 @@ function drawTabBar(w, startY) {
   ]
   const tabW = w / tabs.length
   
+  context.shadowBlur = 8
+  context.shadowColor = Theme.shadow
+  context.shadowOffsetY = 2
   context.fillStyle = Theme.surface
   context.fillRect(0, startY, w, tabBarHeight)
+  context.shadowBlur = 0
+  context.shadowOffsetY = 0
   
   tabs.forEach((tab, index) => {
     const x = index * tabW
@@ -853,7 +929,10 @@ function drawTabBar(w, startY) {
     
     if (isActive) {
       context.fillStyle = Theme.primary
-      context.fillRect(x + 10, startY + tabBarHeight - 3, tabW - 20, 3)
+      // Rounded indicator
+      const indW = 20
+      const indH = 3
+      drawRoundedRect(context, x + tabW/2 - indW/2, startY + tabBarHeight - 4, indW, indH, 1.5, true, false)
     }
     
     activeButtons.push({
@@ -865,9 +944,6 @@ function drawTabBar(w, startY) {
       }
     })
   })
-  
-  context.fillStyle = Theme.border
-  context.fillRect(0, startY + tabBarHeight - 1, w, 1)
 }
 
 function drawLoading(w, h) {
@@ -900,39 +976,50 @@ function drawError(w, h) {
 
 function drawStoryTab(w) {
   let y = 20
+  
+  const text = storyData.content || ''
+  // Card Width: w - 40
+  // Text Width: w - 80 (20 padding each side inside card)
+  const lines = wrapText(context, text, w - 80, 18)
+  const lineHeight = 30
+  
+  const headerH = 40
+  const textH = lines.length * lineHeight
+  const totalH = headerH + textH + 40
+  
+  drawCard(20, y, w - 40, totalH)
+  
+  let innerY = y + 20
+  
   context.fillStyle = Theme.primary
   context.font = 'bold 14px sans-serif'
   context.textAlign = 'left'
-  context.fillText(`Topic: ${selectedTopic} | Level: ${selectedLevel}`, 20, y)
-  y += 30
-  
-  const text = storyData.content || ''
-  const lines = wrapText(context, text, w - 40, 18)
+  context.fillText(`Topic: ${selectedTopic} | Level: ${selectedLevel}`, 40, innerY)
+  innerY += 40
   
   context.textAlign = 'left'
   context.textBaseline = 'alphabetic'
-  const lineHeight = 30
   
   lines.forEach(line => {
-    let currentX = 20
+    let currentX = 40 // Adjusted for card padding
     const parts = line.split(/(\*\*.*?\*\*)/g)
     parts.forEach(part => {
       if (part.startsWith('**') && part.endsWith('**')) {
         context.font = 'bold 18px sans-serif'
         context.fillStyle = Theme.primary
         const word = part.slice(2, -2)
-        context.fillText(word, currentX, y)
+        context.fillText(word, currentX, innerY)
         currentX += context.measureText(word).width
       } else {
         context.font = '18px sans-serif'
         context.fillStyle = Theme.textMain
-        context.fillText(part, currentX, y)
+        context.fillText(part, currentX, innerY)
         currentX += context.measureText(part).width
       }
     })
-    y += lineHeight
+    innerY += lineHeight
   })
-  return y + 40
+  return y + totalH + 40
 }
 
 function drawWordsTab(w) {
@@ -945,10 +1032,7 @@ function drawWordsTab(w) {
   
   if (storyData.translation_map) {
     Object.keys(storyData.translation_map).forEach(word => {
-      context.fillStyle = Theme.surface
-      context.strokeStyle = Theme.border
-      context.lineWidth = 1
-      drawRoundedRect(context, 20, y, w - 40, 90, 12, true, true)
+      drawCard(20, y, w - 40, 90)
       
       context.fillStyle = Theme.primary
       context.font = 'bold 22px sans-serif'
@@ -968,20 +1052,32 @@ function drawTranslationTab(w) {
   const btnH = 44
   const screenY = contentTop + scrollOffset + y
   
-  drawButton(20, y, 160, btnH, showTranslation ? Theme.secondary : Theme.success, 
+  // Toggle Button
+  const btnBg = showTranslation ? Theme.secondary : Theme.accent
+  const btnTxt = showTranslation ? Theme.secondaryTxt : '#FFFFFF'
+  
+  drawButton(20, y, 160, btnH, btnBg, 
     showTranslation ? 'Hide' : 'Show Translation', '', true, 
-    () => { showTranslation = !showTranslation; draw() }, Theme.textMain, 16, false, screenY)
+    () => { showTranslation = !showTranslation; draw() }, btnTxt, 16, false, screenY)
     
   y += 60
+  
   if (showTranslation && storyData.translation) {
-    const lines = wrapText(context, storyData.translation, w - 40, 16)
+    const lines = wrapText(context, storyData.translation, w - 80, 16)
+    const textH = lines.length * 28 + 40
+    
+    drawCard(20, y, w - 40, textH)
+    
+    let innerY = y + 30
+    
     context.fillStyle = Theme.textSub
     context.font = '16px sans-serif'
     context.textAlign = 'left'
     lines.forEach(line => {
-      context.fillText(line, 20, y)
-      y += 28
+      context.fillText(line, 40, innerY) // Adjusted for card padding
+      innerY += 28
     })
+    y += textH + 20
   } else if (!showTranslation) {
     context.fillStyle = Theme.textSub
     context.font = 'italic 16px sans-serif'
@@ -997,98 +1093,104 @@ function drawQuizTab(w) {
   const q = storyData.quiz[quizIndex]
   if (!q) return y
   
+  // Calculate Card Height
+  const qLines = wrapText(context, q.question, w - 80, 18) // Adjusted for card padding
+  const qTextHeight = qLines.length * 28
+  
+  const optionsHeight = q.options.length * 65
+  const buttonsHeight = 44 + 20
+  
+  const totalH = 30 + qTextHeight + 20 + optionsHeight + buttonsHeight + 40
+  
+  drawCard(20, y, w - 40, totalH)
+  
+  let innerY = y + 20
+  
   context.fillStyle = Theme.textSub
   context.font = '14px sans-serif'
   context.textAlign = 'center'
-  context.fillText(`Question ${quizIndex + 1} of ${storyData.quiz.length}`, w/2, y)
-  y += 30
+  context.fillText(`Question ${quizIndex + 1} of ${storyData.quiz.length}`, w/2, innerY)
+  innerY += 40
   
   context.fillStyle = Theme.textMain
   context.font = 'bold 18px sans-serif'
   context.textAlign = 'left'
-  const lines = wrapText(context, q.question, w - 40, 18)
-  lines.forEach(line => {
-    context.fillText(line, 20, y)
-    y += 28
-  })
-  y += 20
   
-  const screenY = contentTop + scrollOffset + y
+  qLines.forEach(line => {
+    context.fillText(line, 40, innerY)
+    innerY += 28
+  })
+  innerY += 20
+  
+  const screenY = contentTop + scrollOffset + innerY
   
   q.options.forEach(opt => {
-    let bgColor = Theme.surface
+    let bgColor = Theme.secondary // Default option bg (Ghost/Light Grey)
     let txtColor = Theme.textMain
-    let borderColor = Theme.border
+    let borderColor = null
     
     if (quizAnswered) {
       if (opt === q.answer) {
-        bgColor = 'rgba(16, 185, 129, 0.2)'
-        borderColor = Theme.success
-        txtColor = Theme.success
+        bgColor = 'rgba(103, 194, 58, 0.2)' // Theme.accent with opacity
+        borderColor = Theme.accent
+        txtColor = Theme.accent
       } else if (opt === quizSelectedOption) {
-        bgColor = 'rgba(239, 68, 68, 0.2)'
+        bgColor = 'rgba(245, 108, 108, 0.2)' // Theme.error with opacity
         borderColor = Theme.error
         txtColor = Theme.error
       }
     }
     
-    drawButton(20, y, w - 40, 50, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, screenY)
+    // Use Ghost Button style for options? Or Light Grey?
+    // Prompt: "Secondary Button: Light Gray background (#E4E7ED) + Dark Gray text"
+    // So Theme.secondary is fine.
     
-    // Draw Border manually since drawButton is simple
-    context.strokeStyle = borderColor
-    context.lineWidth = 1
-    drawRoundedRect(context, 20, y, w - 40, 50, 10, false, true)
+    drawButton(40, innerY, w - 80, 50, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, screenY, borderColor)
     
-    y += 65
+    innerY += 65
   })
   
-  y += 20
+  innerY += 10
+  
   // Next / Skip Button
-  const btnW = (w - 60) / 2
+  const btnW = (w - 100) / 2 // Adjusted width for card padding (40 left + 40 right + 20 gap)
   const isLast = quizIndex === storyData.quiz.length - 1
   
   // Skip Button (Left)
   if (!isLast) {
-      drawButton(20, y, btnW, 44, Theme.secondary, '跳过', '', true, () => {
+      drawButton(40, innerY, btnW, 44, 'transparent', 'Skip', '', true, () => {
           skipQuestion()
-      }, Theme.textMain, 16, false, screenY)
+      }, Theme.textSub, 16, false, screenY, Theme.border) // Ghost button with border
   }
   
-  // Next/Finish Button (Right)
-  // If answered, show "Next" or "Finish"
-  // If not answered, show "Next" (which acts as check? No, user asked for skip)
-  // We'll show "下一题" (Next Question)
+  const nextLabel = isLast ? 'Finish' : 'Next'
   
-  const nextLabel = isLast ? '完成' : '下一题'
-  const nextBg = quizAnswered ? Theme.primary : Theme.primary // Always primary? Or disabled if not answered?
-  // User said "Can skip", so maybe Next is just Next.
-  // But typically Next implies "Submit" if not answered?
-  // Current logic: if answered next(), else skip().
-  // With separate buttons:
-  // Skip -> skipQuestion()
-  // Next -> if answered next(), else... toast "Please answer"?
-  
-  const rightBtnX = isLast ? (w - 100)/2 : (w - 20 - btnW)
+  const rightBtnX = isLast ? (w - 140)/2 + 20 : (40 + btnW + 20)
   const rightBtnW = isLast ? 100 : btnW
   
-  drawButton(rightBtnX, y, rightBtnW, 44, Theme.primary, nextLabel, '', true, () => {
+  drawButton(rightBtnX, innerY, rightBtnW, 44, Theme.primary, nextLabel, '', true, () => {
       if (quizAnswered) {
           if (isLast) finishQuiz()
           else nextQuestion()
       } else {
-          // If they click Next without answering, maybe they meant to skip?
-          // But we have a Skip button now.
-          // So show toast "Please select an answer or click Skip"
-          wx.showToast({ title: '请选择答案或点击跳过', icon: 'none' })
+          wx.showToast({ title: 'Please select an answer', icon: 'none' })
       }
-  }, Theme.textMain, 16, false, screenY)
+  }, Theme.primaryTxt, 16, false, screenY)
   
-  return y + 100
+  return y + totalH + 40
 }
 
 function drawAudioPlayer(w, y, h) {
+  // Shadow
+  context.shadowBlur = 10
+  context.shadowColor = Theme.shadow
+  context.shadowOffsetY = -2
+  
   context.fillStyle = Theme.surface
   context.fillRect(0, y, w, h)
+  
+  context.shadowBlur = 0
+  context.shadowOffsetY = 0
   
   // Progress Bar
   context.fillStyle = Theme.secondary
@@ -1101,14 +1203,34 @@ function drawAudioPlayer(w, y, h) {
   const btnX = w / 2 - btnSize / 2
   const btnY = y + (h - btnSize) / 2 + 4
   
-  drawButton(btnX, btnY, btnSize, btnSize, Theme.primary, isAudioPlaying ? '||' : '▶', '', true, () => toggleAudio(), Theme.textMain, 24)
+  drawButton(btnX, btnY, btnSize, btnSize, Theme.primary, isAudioPlaying ? '||' : '▶', '', true, () => toggleAudio(), Theme.primaryTxt, 24)
 }
 
 // --- Helper Functions ---
 
-function drawButton(x, y, w, h, bg, text, subtext, interactive, callback, textColor = '#fff', fontSize = 16, isFixed = false, screenY = null) {
+function drawCard(x, y, w, h) {
+    context.fillStyle = Theme.surface
+    context.shadowBlur = 12
+    context.shadowColor = Theme.shadow
+    context.shadowOffsetY = 2
+    drawRoundedRect(context, x, y, w, h, 12, true, false)
+    context.shadowBlur = 0
+    context.shadowOffsetY = 0
+}
+
+function drawButton(x, y, w, h, bg, text, subtext, interactive, callback, textColor = '#fff', fontSize = 16, isFixed = false, screenY = null, borderColor = null) {
   context.fillStyle = bg
-  drawRoundedRect(context, x, y, w, h, 12, true, false)
+  
+  if (borderColor) {
+      context.strokeStyle = borderColor
+      context.lineWidth = 1
+  }
+  
+  // Ghost button logic: if bg is transparent, don't fill unless we want hit area? 
+  // Actually drawRoundedRect handles fill if 'bg' is passed. 
+  // If bg is 'transparent', fill is transparent.
+  
+  drawRoundedRect(context, x, y, w, h, 10, true, !!borderColor)
   
   context.fillStyle = textColor
   context.font = `bold ${fontSize}px sans-serif`
