@@ -75,7 +75,7 @@ const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.7.2'
+const BACKEND_VERSION = 'v1.8.0'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -475,48 +475,41 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
 
 function login() {
   wx.showLoading({ title: '登录中...' })
-  wx.login({
-    success: async (res) => {
-      const payload = { code: res.code || "cloud_mode", userInfo: null }
-      
-      const onLoginFail = () => {
-          wx.hideLoading()
-          // Fallback to Guest Mode if backend is not available
-          console.warn('Backend login failed, using Guest Mode')
-          user = { openid: 'guest_' + Math.random().toString(36).substr(2, 9) }
-          isLogin = true
-          wx.setStorageSync('user', user)
-          draw()
-          wx.showToast({ title: '访客模式', icon: 'none' })
-      }
-
-      callApi('/login', 'POST', payload, (resp) => {
-        wx.hideLoading()
-        if (resp.statusCode === 200) {
-          const { openid } = resp.data
-          user = { openid }
-          isLogin = true
-          wx.setStorageSync('user', user)
-          draw()
-          wx.showToast({ title: '登录成功' })
-        } else {
-          onLoginFail()
-        }
-      }, () => {
-        onLoginFail()
-      })
-    },
-    fail: () => {
+  
+  const onLoginFail = (err) => {
       wx.hideLoading()
-      // Fallback even if wx.login fails
-      console.warn('wx.login failed, using Guest Mode')
+      console.warn('Cloud login failed, using Guest Mode', err)
       user = { openid: 'guest_' + Math.random().toString(36).substr(2, 9) }
       isLogin = true
       wx.setStorageSync('user', user)
       draw()
       wx.showToast({ title: '访客模式', icon: 'none' })
-    }
-  })
+  }
+
+  // Use Cloud Function for Login
+  if (USE_CLOUD && wx.cloud) {
+      wx.cloud.callFunction({
+          name: 'wordweaver',
+          data: { action: 'login' }
+      }).then(res => {
+          wx.hideLoading()
+          if (res.result && res.result.openid) {
+              const { openid } = res.result
+              user = { openid }
+              isLogin = true
+              wx.setStorageSync('user', user)
+              draw()
+              wx.showToast({ title: '登录成功' })
+          } else {
+              onLoginFail('No openid returned')
+          }
+      }).catch(err => {
+          onLoginFail(err)
+      })
+  } else {
+      // Fallback for non-cloud (should not happen in this version but safe to keep)
+      onLoginFail('Cloud not enabled')
+  }
 }
 
 const storedUser = wx.getStorageSync('user')
@@ -532,29 +525,49 @@ function fetchHistory() {
   if (!user || !user.openid) return
   isHubLoading = true
   draw()
-  callApi(`/quiz_history?openid=${user.openid}`, 'GET', null, (res) => {
-    historyData = res.data || []
-    isHubLoading = false
-    draw()
-  }, (err) => {
-    console.error(err)
-    isHubLoading = false
-    draw()
-  })
+  
+  // Use Cloud Function
+  if (USE_CLOUD && wx.cloud) {
+      wx.cloud.callFunction({
+          name: 'wordweaver',
+          data: { action: 'get_history' }
+      }).then(res => {
+          historyData = (res.result && res.result.data) ? res.result.data : []
+          isHubLoading = false
+          draw()
+      }).catch(err => {
+          console.error(err)
+          isHubLoading = false
+          draw()
+      })
+  } else {
+      isHubLoading = false
+      draw()
+  }
 }
 
 function fetchLeaderboard() {
   isHubLoading = true
   draw()
-  callApi(`/leaderboard?type=${rankType}`, 'GET', null, (res) => {
-    leaderboardData = res.data || []
-    isHubLoading = false
-    draw()
-  }, (err) => {
-    console.error(err)
-    isHubLoading = false
-    draw()
-  })
+  
+  // Use Cloud Function
+  if (USE_CLOUD && wx.cloud) {
+      wx.cloud.callFunction({
+          name: 'wordweaver',
+          data: { action: 'get_leaderboard' }
+      }).then(res => {
+          leaderboardData = (res.result && res.result.data) ? res.result.data : []
+          isHubLoading = false
+          draw()
+      }).catch(err => {
+          console.error(err)
+          isHubLoading = false
+          draw()
+      })
+  } else {
+      isHubLoading = false
+      draw()
+  }
 }
 
 // --- Game Logic ---
@@ -775,14 +788,28 @@ function finishQuiz() {
 
 function submitScore(points) {
     if (!user || !user.openid) return
-    callApi('/submit_quiz', 'POST', {
-        openid: user.openid,
-        topic: selectedTopic,
-        level: selectedLevel,
-        score: points
-    }, () => {
-        console.log('Score submitted')
-    }, (err) => console.error('Score submit failed', err))
+    
+    // Use Cloud Function
+    if (USE_CLOUD && wx.cloud) {
+        wx.cloud.callFunction({
+            name: 'wordweaver',
+            data: { 
+                action: 'submit_quiz',
+                data: {
+                    score: points,
+                    level: selectedLevel,
+                    topic: selectedTopic,
+                    userInfo: user.userInfo || {} // If we had user info
+                }
+            }
+        }).then(res => {
+            console.log('Score submitted via Cloud Function')
+        }).catch(err => {
+            console.error('Score submit failed', err)
+        })
+    } else {
+        // Fallback or ignore
+    }
 }
 
 function saveRecord() {

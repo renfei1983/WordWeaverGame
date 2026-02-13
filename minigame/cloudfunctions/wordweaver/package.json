@@ -1,0 +1,11 @@
+{
+  "name": "wordweaver",
+  "version": "1.0.0",
+  "description": "WordWeaver Game Cloud Function",
+  "main": "index.js",
+  "author": "Ren",
+  "license": "MIT",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
