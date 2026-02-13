@@ -36,7 +36,7 @@ def read_root():
     return {"message": "WordWeaver TTS Backend is running", "version": "1.0.0"}
 
 @app.get("/audio")
-async def text_to_speech(text: str = Query(..., max_length=1000), voice: str = "en-US-ChristopherNeural"):
+async def text_to_speech(text: str = Query(..., max_length=5000), voice: str = "en-US-ChristopherNeural"):
     """
     Generate TTS audio using edge-tts (Microsoft Edge TTS).
     Returns binary audio data directly.

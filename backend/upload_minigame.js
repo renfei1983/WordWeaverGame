@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
     project,
-    version: '1.10.1',
-    desc: 'Deployed via Trae IDE - 2026 AI Standard Update (v1.10.1) - Fix Record Save Error',
+    version: '1.11.4',
+    desc: 'Update: Increased TTS Text Limit to 5000 chars',
     setting: {
       es6: true,
       minify: true,

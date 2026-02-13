@@ -1,19 +1,8 @@
 const { vocabularyDict } = require('./vocabulary.js')
 
 // --- Plugins ---
-// WechatSI removed due to compilation error when plugin is not added in admin console.
-// Using Cloud Function Fallback by default.
-let wechatSI = null
-let pluginMissing = true // Force fallback
-/*
-try {
-  wechatSI = requirePlugin("WechatSI")
-  pluginMissing = false
-} catch (e) {
-  console.warn("WechatSI plugin not found...", e)
-  pluginMissing = true
-}
-*/
+// WechatSI has been removed as per user request (not supported in Mini Games).
+// Using Cloud Hosting (Edge TTS) exclusively.
 
 // --- Polyfills (MUST BE FIRST) ---
 if (typeof setTimeout === 'undefined') {
@@ -83,14 +72,14 @@ const setInterval = GameGlobal.setInterval || window.setInterval || function(cb,
 const clearInterval = GameGlobal.clearInterval || window.clearInterval || function() {}
 
 // --- Configuration ---
-const CLOUD_ENV = 'cloudbase-1g6a925fc4f71607'
+const CLOUD_ENV = 'cloudbase-1g6a925fc4f71607' // Cloud Base Environment ID (Function/DB)
+const CLOUD_HOSTING_ENV = 'prod-5glh5gz97b0f6495' // Cloud Hosting Environment ID (TTS Service)
 const USE_CLOUD = true
 const USE_STREAM = true // Enable streaming
 const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
-// TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
-// The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
-const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.10.1'
+// Cloud Hosting URL (TTS Service) - Not used for callContainer, but good for reference
+const CLOUD_API_URL = 'https://wordweaver-backend-prod-5glh5gz97b0f6495.cn-shanghai.run.tcloudbase.com' 
+const BACKEND_VERSION = 'v1.10.3'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -257,10 +246,10 @@ function callApi(path, method, data, success, fail) {
 
   if (USE_CLOUD) {
     wx.cloud.callContainer({
-      config: { env: CLOUD_ENV },
+      config: { env: CLOUD_HOSTING_ENV },
       path: finalPath,
       header: {
-        'X-WX-SERVICE': 'flask-service',
+        'X-WX-SERVICE': 'flask-service', // Default service name
         'content-type': 'application/json'
       },
       method: method,
@@ -379,35 +368,19 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
              return
         }
 
-        // --- Step 1: Get Available Models (Dynamic) ---
+        // --- Step 1: Call AI Model (DeepSeek Provider / Qwen Model) ---
         ;(async () => {
             try {
-                // 1. Get and print available models
-                let modelId = "hunyuan-turbos-latest" // Default to user preferred model
-                if (wx.cloud.extend.AI.getModels) {
-                    try {
-                        const models = await wx.cloud.extend.AI.getModels()
-                        console.log('Available AI Models:', models)
-                        // If we find a suitable model in the list, we could use it
-                        // Prioritize hunyuan-turbos-latest, then hunyuan-lite, then hunyuan-exp
-                        if (models && models.length > 0) {
-                             const found = models.find(m => m.id === 'hunyuan-turbos-latest') || 
-                                           models.find(m => m.id === 'hunyuan-lite') || 
-                                           models.find(m => m.id === 'hunyuan-exp')
-                             if (found) modelId = found.id
-                        }
-                    } catch (e) {
-                        console.warn('getModels failed:', e)
-                    }
-                }
-
+                // User requested specific configuration for DeepSeek provider but using Qwen model
+                // Provider: deepseek
+                // Model: Qwen/Qwen3-32B
+                const modelId = "Qwen/Qwen3-32B"
                 console.log('Using Model ID:', modelId)
 
-                // 2. Create Model Instance
-                // Use the user-suggested "hunyuan-exp" to access newer models
-                const ai = wx.cloud.extend.AI.createModel("hunyuan-exp") 
+                // Create Model Instance with "deepseek" as requested
+                const ai = await wx.cloud.extend.AI.createModel("deepseek")
 
-                // 3. Call streamText with new interface (Async Iterable)
+                // Call streamText
                 const res = await ai.streamText({
                     data: {
                         model: modelId, 
@@ -418,7 +391,7 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                     }
                 })
 
-                // 4. Handle Stream
+                // Handle Stream
                 if (res.eventStream) {
                     for await (const event of res.eventStream) {
                         if (event.data === "[DONE]") {
@@ -431,7 +404,6 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                             const think = data?.choices?.[0]?.delta?.reasoning_content
                             if (think) {
                                 console.log('[AI Think]', think)
-                                // Note: We do NOT pass thinking process to onChunk as it's not valid JSON story data
                             }
 
                             // Handle content
@@ -450,12 +422,7 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                 if (onSuccess) onSuccess()
 
             } catch (err) {
-                console.error('Hunyuan AI Exception:', err)
-                wx.showModal({
-                    title: 'AI 服务错误',
-                    content: '无法连接到智能模型: ' + (err.message || JSON.stringify(err)),
-                    showCancel: false
-                })
+                console.error('DeepSeek AI Exception:', err)
                 if (onFail) onFail(err)
             }
         })()
@@ -464,6 +431,13 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
     }
 
     // --- Option 2/Fallback: Cloud Container / Local ---
+    // Note: Backend is now TTS-only. Block generate_story fallback.
+    if (path === '/generate_story') {
+        console.warn('generate_story fallback blocked (Backend is TTS only)')
+        if (onFail) onFail(new Error('Backend does not support generate_story. Check Native AI config.'))
+        return
+    }
+
     let finalPath = path
     if (method === 'GET' && data) {
         const params = []
@@ -517,6 +491,13 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
         fail: (err) => {
             console.error('Stream request failed', err)
             
+            // Check for 429 Too Many Requests
+            if (err && (err.statusCode === 429 || (err.errMsg && err.errMsg.includes('429')))) {
+                console.warn('429 Too Many Requests detected. Skipping fallback to prevent double-load.')
+                if (onFail) onFail(err)
+                return
+            }
+
             // Fallback to non-streaming API (Cloud Function)
             console.log('Falling back to non-streaming API...')
             // Remove stream parameter from path/data if present
@@ -612,6 +593,7 @@ function fetchHistory() {
   if (USE_CLOUD && wx.cloud) {
       wx.cloud.callFunction({
           name: 'wordweaver',
+          config: { env: CLOUD_ENV }, // Explicitly set env
           data: { action: 'get_history' }
       }).then(res => {
           historyData = (res.result && res.result.data) ? res.result.data : []
@@ -671,8 +653,45 @@ function pickRandomWords(count = 5) {
   return shuffled.slice(0, count)
 }
 
+let prefetchRetryCount = 0;
+const MAX_PREFETCH_RETRIES = 5;
+const PREFETCH_DELAY_MS = 5000; // 5 seconds delay between serial calls
+let totalPrefetchedCount = 0; // Total successful prefetches in current session
+const MAX_TOTAL_PREFETCH = 5; // Hard limit for session
+let globalAiErrorCount = 0; // Global counter for ALL AI failures
+const MAX_GLOBAL_AI_ERRORS = 5; // Max allowed failures before circuit breaking
+
 function prefetchStory(onProgress) {
-    if (storyBuffer.length >= 3 || isPrefetching) return
+    // Check circuit breaker first
+    if (globalAiErrorCount >= MAX_GLOBAL_AI_ERRORS) {
+        console.error('Global AI Error Limit Reached. Aborting request.')
+        // DO NOT SHOW MODAL if not generating.
+        if (gameState === 'GENERATING') {
+            wx.showModal({
+                title: '服务暂时不可用',
+                content: 'AI 服务连接失败次数过多，请稍后重试。',
+                showCancel: false,
+                success: () => {
+                    currentScene = 'wordweaver' 
+                    draw()
+                }
+            })
+        }
+        return
+    }
+
+    // Check buffer size, lock, AND total session limit
+    // Also, enforce a minimum timestamp gap if needed? 
+    // Let's rely on isPrefetching for now.
+    
+    if (storyBuffer.length >= 3 || isPrefetching || totalPrefetchedCount >= MAX_TOTAL_PREFETCH) {
+        if (totalPrefetchedCount >= MAX_TOTAL_PREFETCH) {
+            console.log('Max session prefetch limit reached (5). Stopping background loading.')
+        } else if (isPrefetching) {
+            console.log('Already prefetching (locked). Skipping duplicate call.')
+        }
+        return
+    }
 
     isPrefetching = true
     const words = pickRandomWords(5)
@@ -680,8 +699,10 @@ function prefetchStory(onProgress) {
     // Capture current settings to verify consistency later
     const requestedTopic = selectedTopic
     const requestedLevel = selectedLevel
-
-    console.log('Prefetching story (Stream)...', requestedTopic, requestedLevel)
+    
+    // Add unique request ID for tracking
+    const requestId = Date.now().toString().slice(-6);
+    console.log(`[${requestId}] Prefetching story (Stream)...`, requestedTopic, requestedLevel)
     
     let accumulatedJSON = ""
     
@@ -693,15 +714,20 @@ function prefetchStory(onProgress) {
         // onChunk
         accumulatedJSON += chunk
         if (onProgress) onProgress() 
+        // Reset retry count on successful data receipt
+        prefetchRetryCount = 0;
+        // globalAiErrorCount = 0; // Don't reset global error count on just ONE chunk. Only on full success.
     }, () => {
         // onSuccess
+        isPrefetching = false; // Release lock immediately
+        globalAiErrorCount = 0; // Reset global error count on FULL success
+
         // Consistency check: discard if settings changed during fetch
         if (selectedTopic !== requestedTopic || selectedLevel !== requestedLevel) {
             console.log('Discarding prefetched story due to settings change')
-            isPrefetching = false
-            // Retry with new settings if buffer low
+            // Retry with new settings if buffer low, with delay
             if (storyBuffer.length < 3) {
-                 prefetchStory(onProgress)
+                 setTimeout(() => prefetchStory(onProgress), PREFETCH_DELAY_MS);
             }
             return
         }
@@ -714,25 +740,100 @@ function prefetchStory(onProgress) {
             const data = JSON.parse(cleanJSON(accumulatedJSON))
             if (data && !data.error) {
                 storyBuffer.push(data)
-                console.log('Story buffered. Current buffer size:', storyBuffer.length)
+                totalPrefetchedCount++; // Increment session count
+                console.log('Story buffered. Current buffer size:', storyBuffer.length, 'Total:', totalPrefetchedCount)
                 
-                // If waiting for this story, start game
+                // If waiting for this story, start game immediately (no delay for user waiting)
                 if (gameState === 'GENERATING' && storyBuffer.length > 0) {
                      startNewGame()
+                     // Don't trigger recursive fill here; startNewGame handles it if needed
+                     // But we want to fill buffer in background, so...
                 }
             }
         } catch (e) {
             console.error('JSON Parse Error', e)
         }
 
-        isPrefetching = false
-        // Recursively fill buffer if needed
-        if (storyBuffer.length < 3) {
-            prefetchStory() // No callback for background fill
+        // Serial Execution with Delay:
+        // Only if we need more stories and not already prefetching (lock released above)
+        // User request: Change prefetch limit to 2 (current + 1 buffered)
+        // So buffer length should be checked against 1 (since current is playing, buffer stores next ones)
+        // Actually, if we want "current + 1", buffer should have 1 item ready.
+        // If we want "total 2 generated", it means 1 active + 1 waiting.
+        if (storyBuffer.length < 1) { // Changed from < 3 to < 1
+            console.log(`Scheduling next prefetch in ${PREFETCH_DELAY_MS}ms...`);
+            setTimeout(() => {
+                prefetchStory(); // No callback for background fill
+            }, PREFETCH_DELAY_MS);
         }
+
     }, (err) => {
         console.error('Prefetch Error', err)
         isPrefetching = false
+        globalAiErrorCount++; // Increment global error counter
+        console.error('Prefetch Error. Global Error Count:', globalAiErrorCount)
+
+        // Check if we hit the global limit immediately
+        if (globalAiErrorCount >= MAX_GLOBAL_AI_ERRORS) {
+            console.error('Global AI Error Limit Reached (in callback). Stopping all retries.')
+            if (gameState === 'GENERATING') {
+                wx.showModal({
+                    title: '服务暂时不可用',
+                    content: 'AI 服务连接失败次数过多，请稍后重试。',
+                    showCancel: false,
+                    success: () => {
+                        currentScene = 'wordweaver' 
+                        draw()
+                    }
+                })
+            }
+            return // STOP EVERYTHING
+        }
+        
+        // Handle 429 Too Many Requests with Exponential Backoff
+        if (err && (err.statusCode === 429 || (err.message && err.message.includes('429')))) {
+            prefetchRetryCount++;
+            if (prefetchRetryCount <= MAX_PREFETCH_RETRIES) {
+                // Ensure retry delay is AT LEAST 5 seconds (5000ms)
+                // Original: 2, 4, 8, 16, 32 -> New: 5, 5, 8, 16, 32
+                let delay = Math.pow(2, prefetchRetryCount) * 1000; 
+                if (delay < 5000) delay = 5000;
+                
+                console.log(`Rate limited (429). Retrying in ${delay}ms... (Attempt ${prefetchRetryCount}/${MAX_PREFETCH_RETRIES})`);
+                setTimeout(() => {
+                    prefetchStory(onProgress);
+                }, delay);
+                return; // Exit and wait for timeout
+            } else {
+                console.error('Max prefetch retries reached for 429. Stopping prefetch.');
+                if (gameState === 'GENERATING') {
+                    wx.showModal({
+                        title: '请求过于频繁',
+                        content: 'AI 服务繁忙，请稍后再试。',
+                        showCancel: false,
+                        success: () => {
+                            currentScene = 'wordweaver' // Go back to hub
+                            draw()
+                        }
+                    })
+                }
+                return;
+            }
+        }
+        
+        // For other errors, force stop recursion to prevent infinite loops
+        console.error('Non-429 Prefetch Error. Stopping recursion to prevent loops.', err)
+        if (gameState === 'GENERATING') {
+            wx.showModal({
+                title: '生成失败',
+                content: '网络或服务异常，请稍后重试。',
+                showCancel: false,
+                success: () => {
+                    currentScene = 'wordweaver' // Go back to hub
+                    draw()
+                }
+            })
+        }
     })
 }
 
@@ -758,8 +859,8 @@ function startNewGame() {
         // Use buffered story
         const data = storyBuffer.shift()
         useStoryData(data)
-        // Trigger background prefetch to refill
-        prefetchStory()
+        // Trigger background prefetch to refill - DISABLED to prevent runaway requests
+        // prefetchStory()
     } else {
         // No buffer, must wait
         gameState = 'GENERATING'
@@ -903,19 +1004,38 @@ function submitScore(points) {
 }
 
 function saveRecord() {
-  if (!user || !user.openid || !storyData) return
+  // Only save record if user answered at least 1 question correctly
+  // Relaxed from 3 to 1 to allow partial success to be recorded
+  if (correctCount < 1) {
+      console.log('Skipping record save: No correct answers')
+      return
+  }
+
+  if (!user || !user.openid || !storyData) {
+      console.error('Save failed: Missing user or storyData', { user, hasStoryData: !!storyData })
+      return
+  }
   
   const wordsList = []
   if (storyData.translation_map) {
     Object.keys(storyData.translation_map).forEach(key => {
       wordsList.push({ word: key, meaning: storyData.translation_map[key] })
     })
+  } else {
+    console.warn('Save warning: No translation_map in storyData', storyData)
   }
+
+  console.log('Attempting to save record...', { 
+      count: wordsList.length, 
+      level: selectedLevel, 
+      topic: selectedTopic 
+  })
 
   // Use Cloud Function
   if (USE_CLOUD && wx.cloud) {
       wx.cloud.callFunction({
           name: 'wordweaver',
+          config: { env: CLOUD_ENV }, // Explicitly set env
           data: { 
               action: 'record_learning',
               data: {
@@ -926,6 +1046,7 @@ function saveRecord() {
           }
       }).then(res => {
           console.log('Record saved via Cloud Function')
+          wx.showToast({ title: '记录已保存', icon: 'success' })
       }).catch(err => {
           console.error('Record save failed', err)
       })
@@ -951,125 +1072,41 @@ function fetchAndPlayAudio() {
   
   const text = storyData.content.replace(/\*\*/g, '')
 
-  // Priority 1: Use WechatSI Plugin (Native, Free, Fast)
-  if (wechatSI) {
-      wx.showLoading({ title: '语音生成中...' })
-      // WechatSI has a limit (approx 1024 chars). Truncate if necessary.
-      const safeText = text.length > 1000 ? text.slice(0, 1000) : text
-      
-      wechatSI.textToSpeech({
-          lang: "en_US",
-          tts: true,
-          content: safeText,
-          success: function(res) {
-              wx.hideLoading()
-              console.log("TTS Success:", res.filename)
-              currentAudioSrc = res.filename
-              
-              if (!audioCtx) initAudio()
-              
-              // Ensure audio context is ready
-              audioCtx.stop()
-              audioCtx.src = currentAudioSrc
-              audioCtx.play()
-          },
-          fail: function(res) {
-              wx.hideLoading()
-              console.error("TTS Failed:", res)
-              wx.showToast({ title: '语音生成失败', icon: 'none' })
-          }
-      })
-      return
-  }
-  
-  // Plugin Missing Alert
-  if (pluginMissing) {
-      console.warn("WechatSI missing. Attempting Backend (Cloud Container) Fallback...")
-      
-      wx.showLoading({ title: '加载音频...' })
-      
-      // Use Backend API (FastAPI + Edge-TTS)
-      // Works for both Local Dev (localhost) and Cloud Hosting (Container)
-      
-      // Determine API URL based on environment
-      // If you are testing locally, keep using localhost.
-      // If you are deploying or want to test the Cloud Hosting service, uncomment the second line.
-      
-      // const apiUrl = 'http://localhost:8000/audio' 
-      // New Service: wordweaver-backend
-      const apiUrl = 'https://wordweaver-backend-prod-5glh5gz97b0f6495.cn-shanghai.run.tcloudbase.com/audio'
-      
-      console.log('Requesting TTS from:', apiUrl)
-      
-      wx.request({
-          url: apiUrl, 
-          method: 'GET',
-          data: {
-              text: text
-          },
-          responseType: 'arraybuffer',
-          success: (res) => {
-              wx.hideLoading()
-              if (res.statusCode === 200 && res.data.byteLength > 0) {
-                  const fs = wx.getFileSystemManager()
-                  const filePath = `${wx.env.USER_DATA_PATH}/tts_backend_${Date.now()}.mp3`
-                  
-                  try {
-                      fs.writeFileSync(filePath, res.data, 'binary')
-                      currentAudioSrc = filePath
-                      if (!audioCtx) initAudio()
-                      audioCtx.stop()
-                      audioCtx.src = currentAudioSrc
-                      audioCtx.play()
-                  } catch (e) {
-                      console.error('File Write Error', e)
-                      wx.showToast({ title: '写入失败', icon: 'none' })
-                  }
-              } else {
-                  console.error('Backend TTS Failed', res)
-                  wx.showToast({ title: '音频生成失败', icon: 'none' })
-              }
-          },
-          fail: (err) => {
-              wx.hideLoading()
-              console.error('Backend Request Error', err)
-              wx.showToast({ title: '连接后端失败', icon: 'none' })
-          }
-      })
-      return
-  }
-
-  // Priority 2: Fallback to Backend API (if plugin not available)
+  console.log("Requesting TTS from Cloud Container (Edge TTS)...")
   wx.showLoading({ title: '加载音频...' })
   
   wx.cloud.callContainer({
-    config: { env: CLOUD_ENV },
-    path: `/audio?text=${encodeURIComponent(text.slice(0, 500))}`,
+    config: { env: CLOUD_HOSTING_ENV },
+    path: `/audio?text=${encodeURIComponent(text.slice(0, 5000))}`,
     method: 'GET',
-    header: { 'X-WX-SERVICE': 'flask-service' },
+    header: { 'X-WX-SERVICE': 'wordweaver-backend' }, // Explicit service name matching URL
+    timeout: 60000, // 60s timeout for cold starts
     responseType: 'arraybuffer',
     success: (res) => {
-      wx.hideLoading()
-      if (res.statusCode === 200 && res.data.byteLength > 0) {
-        const fs = wx.getFileSystemManager()
-        const timestamp = Date.now()
-        const filePath = `${wx.env.USER_DATA_PATH}/story_audio_${timestamp}.mp3`
-        try {
-          fs.writeFileSync(filePath, res.data)
-          currentAudioSrc = filePath
-          initAudio()
-          audioCtx.src = filePath
-          audioCtx.play()
-        } catch (e) {
-          wx.showToast({ title: '写入失败', icon: 'none' })
+        wx.hideLoading()
+        if (res.statusCode === 200 && res.data.byteLength > 0) {
+            const fs = wx.getFileSystemManager()
+            const filePath = `${wx.env.USER_DATA_PATH}/tts_backend_${Date.now()}.mp3`
+            try {
+                fs.writeFileSync(filePath, res.data, 'binary')
+                currentAudioSrc = filePath
+                if (!audioCtx) initAudio()
+                audioCtx.stop()
+                audioCtx.src = currentAudioSrc
+                audioCtx.play()
+            } catch (e) {
+                console.error('File Write Error', e)
+                wx.showToast({ title: '写入失败', icon: 'none' })
+            }
+        } else {
+            console.error('Backend TTS Failed', res)
+            wx.showToast({ title: '音频生成失败', icon: 'none' })
         }
-      } else {
-        wx.showToast({ title: '音频无效', icon: 'none' })
-      }
     },
-    fail: () => {
-      wx.hideLoading()
-      wx.showToast({ title: '网络错误', icon: 'none' })
+    fail: (err) => {
+        wx.hideLoading()
+        console.error('Backend Request Error', err)
+        wx.showToast({ title: '连接后端失败', icon: 'none' })
     }
   })
 }
@@ -1520,8 +1557,9 @@ function drawGameScene(w, h) {
   context.shadowOffsetY = 0
   
   // Back Button
-  const backBtnH = 36
-  drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< 主页', '', true, () => {
+  const backBtnH = 30
+  const backBtnW = 40
+  drawButton(10, headerY + (headerHeight - backBtnH)/2, backBtnW, backBtnH, 'transparent', '<', '', true, () => {
     // Confirm exit?
     wx.showModal({
         title: '退出',
@@ -1538,8 +1576,8 @@ function drawGameScene(w, h) {
   }, Theme.primary, 16, true, null, Theme.primary)
 
   // Skip Button (Next to Hub/Back button)
-  const skipBtnW = 70
-  drawButton(100, headerY + (headerHeight - backBtnH)/2, skipBtnW, backBtnH, 'transparent', '>> 跳过', '', true, () => {
+  const skipBtnW = 40
+  drawButton(10 + backBtnW + 10, headerY + (headerHeight - backBtnH)/2, skipBtnW, backBtnH, 'transparent', '>', '', true, () => {
       wx.showModal({
           title: '跳过',
           content: '确定要跳过当前题目并进入下一组吗？',
@@ -1878,7 +1916,7 @@ function drawQuizTab(w) {
   // Skip Button (Ghost Style)
   if (!isLast) {
       const skipW = 60
-      drawButton(startX, innerY, skipW, actionBtnH, 'transparent', '>>', '', true, () => {
+      drawButton(startX, innerY, skipW, actionBtnH, 'transparent', '>', '', true, () => {
           skipQuestion()
       }, Theme.textLight, 24, false, contentTop + scrollOffset + innerY)
   }

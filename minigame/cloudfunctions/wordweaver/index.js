@@ -53,14 +53,22 @@ exports.main = async (event, context) => {
   if (action === 'get_history') {
       try {
           // Fetch from learning_records instead of quiz_history
+          // Removed orderBy('created_at', 'desc') to avoid needing a custom index immediately
           const res = await db.collection('learning_records')
               .where({
                   _openid: openid
               })
-              .orderBy('created_at', 'desc')
+              // .orderBy('created_at', 'desc') 
               .limit(20)
               .get()
           
+          // Debug info
+          const debug_info = {
+              openid: openid,
+              raw_count: res.data.length,
+              first_record: res.data.length > 0 ? res.data[0] : null
+          }
+
           // Flatten words list from records
           // Each record has { words: [{word, meaning}, ...], created_at }
           let history = []
@@ -76,10 +84,10 @@ exports.main = async (event, context) => {
               }
           })
           
-          return { data: history }
+          return { data: history, debug: debug_info }
       } catch (err) {
           console.error(err)
-          return { data: [] }
+          return { data: [], error: err, openid: openid }
       }
   }
 
@@ -105,10 +113,11 @@ exports.main = async (event, context) => {
           // Use Aggregation Pipeline
           const res = await db.collection('quiz_history').aggregate()
               .match(matchCondition)
+              .sort({ created_at: -1 }) // Sort by time descending first
               .group({
                   _id: '$_openid',
                   totalScore: $.sum('$score'),
-                  userInfo: $.first('$userInfo') // Keep the latest userInfo (approximation)
+                  userInfo: $.first('$userInfo') // Keep the latest userInfo
               })
               .sort({
                   totalScore: -1
@@ -135,7 +144,7 @@ exports.main = async (event, context) => {
   if (action === 'record_learning') {
       const { words, source_level, topic } = data
       try {
-          await db.collection('learning_records').add({
+          const res = await db.collection('learning_records').add({
               data: {
                   _openid: openid,
                   words: words, // Array of { word, meaning }
@@ -144,10 +153,10 @@ exports.main = async (event, context) => {
                   created_at: db.serverDate()
               }
           })
-          return { status: 'success' }
+          return { status: 'success', _id: res._id, openid: openid }
       } catch (err) {
           console.error(err)
-          return { status: 'fail', error: err }
+          return { status: 'fail', error: err, openid: openid }
       }
   }
 
