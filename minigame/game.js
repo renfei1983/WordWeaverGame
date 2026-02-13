@@ -70,11 +70,12 @@ const clearInterval = GameGlobal.clearInterval || window.clearInterval || functi
 // --- Configuration ---
 const CLOUD_ENV = 'prod-9g8femu80d9d37f3'
 const USE_CLOUD = true
-const USE_STREAM = true // Enable streaming for Cloud Container
+const USE_STREAM = true // Enable streaming
+const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.6.1'
+const BACKEND_VERSION = 'v1.7.0'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -260,7 +261,136 @@ function callApi(path, method, data, success, fail) {
   }
 }
 
+function buildStoryPrompt(words, level, topic) {
+  const words_str = words.join(", ")
+  
+  let difficulty_desc = ""
+  let length_instruction = ""
+  let quiz_instruction = ""
+  
+  if (level === "KET") {
+      difficulty_desc = "CEFR A2. Use simple sentences and basic connectors (and, but, because)."
+      length_instruction = "Write a short story, around 80-120 words. Around 5-10 sentences."
+      quiz_instruction = "Create 3 simple multiple-choice questions."
+  } else if (level === "PET") {
+      difficulty_desc = "CEFR B1. Use standard grammar, some compound sentences. Moderate vocabulary."
+      length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
+      quiz_instruction = "Create 3 moderate multiple-choice questions."
+  } else if (level === "Junior High") {
+      difficulty_desc = "CEFR B1/B2. Use varied sentence structures. Standard textbook vocabulary."
+      length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
+      quiz_instruction = "Create 3 standard multiple-choice questions."
+  } else if (level === "Senior High") {
+      difficulty_desc = "CEFR B2 (Senior High School). Use complex grammar: passive voice, conditionals (if...), and participial phrases. Story style: News article or formal essay."
+      length_instruction = "Write a longer story, around 180-220 words. Around 20 sentences."
+      quiz_instruction = "Create 3 challenging multiple-choice questions. Focus on inference, synonym matching, and context clues. Options should be slightly ambiguous to test precision."
+  } else if (level === "Postgraduate") {
+      difficulty_desc = "CEFR C1/C2 (Advanced/Academic). Use highly sophisticated grammar: inversion, subjunctive mood, and long compound-complex sentences. Story style: Academic paper, classic literature, or The Economist."
+      length_instruction = "Write a comprehensive story, at least 250 words. Around 25 sentences with deep context."
+      quiz_instruction = "Create 3 advanced multiple-choice questions. Focus on deep reading comprehension, tone analysis, and nuanced vocabulary usage. Options should be complex and require critical thinking."
+  } else {
+      difficulty_desc = "Intermediate level (CEFR B1). Use standard vocabulary and sentence structures."
+      length_instruction = "Keep the story moderate length, around 10-15 sentences."
+      quiz_instruction = "Create 3 standard multiple-choice questions testing comprehension."
+  }
+
+  let topic_context = topic
+  if ((level === "Senior High" || level === "Postgraduate") && topic === "Daily Life") {
+      topic_context = "Sociological or Psychological analysis of modern daily routines"
+  }
+
+  return `
+    You are an expert English teacher creating reading materials for students.
+    
+    TASK: Write a story using these words: ${words_str}.
+    
+    CONSTRAINTS (MUST FOLLOW):
+    1. LEVEL: ${difficulty_desc}
+    2. LENGTH: ${length_instruction}
+    3. TOPIC: ${topic_context}
+    
+    IMPORTANT: The LEVEL and LENGTH constraints are STRICT. Adapt the Topic to fit the Level.
+    - If Level is KET/Elementary, ignore complex topic details. Focus ONLY on simple actions and objects.
+    - Do NOT write a long story if the length instruction says "short".
+    - Do NOT exceed the word count limit.
+    
+    Highlight the target words in Markdown bold (**word**).
+    
+    ALSO, generate 3 multiple-choice questions to test the user's understanding of the vocabulary words in the context of the story. 
+    QUIZ DIFFICULTY: ${quiz_instruction}
+    The questions and options must be in English.
+    
+    The output must be a valid JSON object with the following structure:
+    {
+        "content": "The story content in markdown...",
+        "translation": "The full chinese translation of the story...",
+        "translation_map": {
+            "word1": "chinese_translation1",
+            "word2": "chinese_translation2"
+        },
+        "quiz": [
+            {
+                "question": "Question text here?",
+                "options": ["Option A", "Option B", "Option C", "Option D"],
+                "answer": "Option A"
+            }
+        ]
+    }
+    Ensure the JSON is valid. Do not include markdown formatting (\`\`\`json) around the JSON output, just the raw JSON string.
+  `
+}
+
 function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
+    // --- Option 1: Native AI (Hunyuan) ---
+    if (USE_NATIVE_AI && path === '/generate_story') {
+        console.log('Using Native Hunyuan AI...')
+        const prompt = buildStoryPrompt(data.words, data.level, data.topic)
+        
+        // Ensure wx.cloud.extend.AI is available
+        if (!wx.cloud || !wx.cloud.extend || !wx.cloud.extend.AI) {
+             console.error('wx.cloud.extend.AI not available. Check project config.')
+             if (onFail) onFail(new Error('Native AI not available'))
+             return
+        }
+
+        const ai = wx.cloud.extend.AI.createModel("hunyuan")
+        
+        ;(async () => {
+            try {
+                const res = await ai.streamText({
+                    data: {
+                        messages: [
+                            { role: "system", content: "You are a helpful assistant that outputs raw JSON without markdown formatting." },
+                            { role: "user", content: prompt }
+                        ]
+                    }
+                })
+                
+                // Handle stream
+                // Assuming res.eventStream is an async iterable
+                if (res.eventStream) {
+                  for await (const event of res.eventStream) {
+                      if (event.data) {
+                           // Hunyuan stream usually returns delta content directly or in a structure
+                           // Adjust based on actual event structure. 
+                           // Often event.data is the text chunk.
+                           onChunk(event.data)
+                      }
+                  }
+                }
+                
+                if (onSuccess) onSuccess()
+                
+            } catch (err) {
+                console.error('Hunyuan AI Error:', err)
+                if (onFail) onFail(err)
+            }
+        })()
+        
+        return
+    }
+
+    // --- Option 2/Fallback: Cloud Container / Local ---
     let finalPath = path
     if (method === 'GET' && data) {
         const params = []
