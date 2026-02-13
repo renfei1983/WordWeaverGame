@@ -49,7 +49,8 @@ app.add_middleware(
 # Note: User needs to set SILICONFLOW_API_KEY in .env
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 BASE_URL = "https://api.siliconflow.cn/v1"
-MODEL = "Qwen/Qwen3-32B" # Switch to Qwen3 32B as requested
+MODEL = "Qwen/Qwen3-235B-A22B-Instruct-2507" # Switch to Qwen3 235B as requested
+# MODEL = "Qwen/Qwen3-32B" # Previous
 # MODEL = "Qwen/Qwen3-Next-80B-A3B-Instruct" # Previous
 # MODEL = "Pro/deepseek-ai/DeepSeek-V3.2" # Previous
 # MODEL = "Qwen/Qwen2.5-72B-Instruct" # Switch to Qwen 2.5 72B (Faster & Stable)
@@ -187,21 +188,17 @@ async def generate_story(
     length_instruction = ""
     quiz_instruction = ""
     
-    if level == "Primary School":
-        difficulty_desc = "CEFR A1/A2. Use very simple vocabulary and short sentences (5-8 words). Present tense mostly."
-        length_instruction = "Write a short story, around 50-80 words. Around 8 sentences."
-        quiz_instruction = "Create 3 very simple multiple-choice questions. Focus on direct facts from the text."
-    elif level == "KET":
+    if level == "KET":
         difficulty_desc = "CEFR A2. Use simple sentences and basic connectors (and, but, because)."
-        length_instruction = "Write a short story, around 80-100 words. Around 10 sentences."
+        length_instruction = "Write a short story, around 80-120 words. Around 5-10 sentences."
         quiz_instruction = "Create 3 simple multiple-choice questions."
     elif level == "PET":
         difficulty_desc = "CEFR B1. Use standard grammar, some compound sentences. Moderate vocabulary."
-        length_instruction = "Write a story around 120 words. Around 12 sentences."
+        length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
         quiz_instruction = "Create 3 moderate multiple-choice questions."
     elif level == "Junior High":
         difficulty_desc = "CEFR B1/B2. Use varied sentence structures. Standard textbook vocabulary."
-        length_instruction = "Write a story around 120-150 words. Around 12-15 sentences."
+        length_instruction = "Write a story around 120-150 words. Around 10-15 sentences."
         quiz_instruction = "Create 3 standard multiple-choice questions."
     elif level == "Senior High":
         difficulty_desc = (
@@ -209,7 +206,7 @@ async def generate_story(
             "Use complex grammar: passive voice, conditionals (if...), and participial phrases. "
             "Story style: News article or formal essay."
         )
-        length_instruction = "Write a longer story, around 150-180 words. Around 15 sentences."
+        length_instruction = "Write a longer story, around 180-220 words. Around 20 sentences."
         quiz_instruction = "Create 3 challenging multiple-choice questions. Focus on inference, synonym matching, and context clues. Options should be slightly ambiguous to test precision."
     elif level == "Postgraduate":
         difficulty_desc = (
@@ -217,10 +214,10 @@ async def generate_story(
             "Use highly sophisticated grammar: inversion, subjunctive mood, and long compound-complex sentences. "
             "Story style: Academic paper, classic literature, or The Economist."
         )
-        length_instruction = "Write a comprehensive story, at least 200 words. At least 15-20 sentences with deep context."
+        length_instruction = "Write a comprehensive story, at least 250 words. Around 25 sentences with deep context."
         quiz_instruction = "Create 3 advanced multiple-choice questions. Focus on deep reading comprehension, tone analysis, and nuanced vocabulary usage. Options should be complex and require critical thinking."
     else:
-        # Default fallback
+        # Default fallback (including Primary School if sent)
         difficulty_desc = "Intermediate level (CEFR B1). Use standard vocabulary and sentence structures."
         length_instruction = "Keep the story moderate length, around 10-15 sentences."
         quiz_instruction = "Create 3 standard multiple-choice questions testing comprehension."

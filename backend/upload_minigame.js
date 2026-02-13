@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
         project,
-        version: '1.5.7',
-        desc: 'Deployed via Trae IDE - Fix Hub/Selection Button Alignment (v1.5.7)',
+        version: '1.5.8',
+        desc: 'Deployed via Trae IDE - Adjust Difficulty & Model Qwen3-235B (v1.5.8)',
         setting: {
         es6: true,
         minify: true,
