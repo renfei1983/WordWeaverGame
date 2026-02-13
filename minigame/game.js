@@ -47,20 +47,20 @@ const BACKEND_VERSION = 'v1.2.0'
 const LEVELS = ['Primary School', 'KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
 const TOPICS = ['Daily Life', 'Science', 'Art', 'Harry Potter', 'Avengers', 'Minecraft']
 
-// --- Theme Configuration (Blue Tech Style) ---
+// --- Theme Configuration (Clean White Style) ---
 const Theme = {
-  bg: '#020617',       // Slate 950
-  bgTrans: 'rgba(2, 6, 23, 0.95)',
-  surface: '#0F172A',  // Slate 900
-  primary: '#0EA5E9',  // Sky 500
+  bg: '#F8FAFC',       // Slate 50 (Very light gray/white)
+  bgTrans: 'rgba(255, 255, 255, 0.95)',
+  surface: '#FFFFFF',  // White
+  primary: '#0EA5E9',  // Sky 500 (Clean Blue)
   primaryHover: '#38BDF8', // Sky 400
-  secondary: '#334155', // Slate 700
-  textMain: '#F1F5F9', // Slate 100
-  textSub: '#94A3B8',  // Slate 400
-  accent: '#F59E0B',   // Amber 500
+  secondary: '#E2E8F0', // Slate 200 (Light gray for borders/dividers)
+  textMain: '#1E293B', // Slate 800 (Dark gray text)
+  textSub: '#64748B',  // Slate 500 (Medium gray text)
+  accent: '#F59E0B',   // Amber 500 (Orange accent)
   success: '#10B981',  // Emerald 500
   error: '#EF4444',    // Red 500
-  border: '#1E293B'    // Slate 800
+  border: '#CBD5E1'    // Slate 300
 }
 
 // --- System Info & Layout ---

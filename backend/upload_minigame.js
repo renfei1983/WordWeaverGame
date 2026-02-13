@@ -27,8 +27,8 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
         project,
-        version: '1.3.1',
-        desc: 'Deployed via Trae IDE - WordWeaver Hub Refinements (v1.3.1)',
+        version: '1.4.0',
+        desc: 'Deployed via Trae IDE - Clean White Theme UI Update (v1.4.0)',
         setting: {
         es6: true,
         minify: true,
