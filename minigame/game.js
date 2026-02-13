@@ -79,7 +79,7 @@ const USE_STREAM = true // Enable streaming
 const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // Cloud Hosting URL (TTS Service) - Not used for callContainer, but good for reference
 const CLOUD_API_URL = 'https://wordweaver-backend-prod-5glh5gz97b0f6495.cn-shanghai.run.tcloudbase.com' 
-const BACKEND_VERSION = 'v1.10.3'
+const BACKEND_VERSION = 'v1.11.4'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
