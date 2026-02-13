@@ -1,5 +1,20 @@
 const { vocabularyDict } = require('./vocabulary.js')
 
+// --- Plugins ---
+// WechatSI removed due to compilation error when plugin is not added in admin console.
+// Using Cloud Function Fallback by default.
+let wechatSI = null
+let pluginMissing = true // Force fallback
+/*
+try {
+  wechatSI = requirePlugin("WechatSI")
+  pluginMissing = false
+} catch (e) {
+  console.warn("WechatSI plugin not found...", e)
+  pluginMissing = true
+}
+*/
+
 // --- Polyfills (MUST BE FIRST) ---
 if (typeof setTimeout === 'undefined') {
   const polyfill = function(callback, delay) {
@@ -75,7 +90,7 @@ const USE_NATIVE_AI = true // Use WeChat Cloud Native AI (Hunyuan)
 // TODO: Replace with your Cloud Container Public Domain (e.g. https://flask-service-xxx.sh.run.tcloudbase.com)
 // The previous API Gateway URL (https://flask-service-r4324.gz.apigw.tencentcs.com/release) may not support streaming.
 const CLOUD_API_URL = 'https://flask-service-r4324.gz.apigw.tencentcs.com/release' 
-const BACKEND_VERSION = 'v1.9.0'
+const BACKEND_VERSION = 'v1.10.1'
 
 // --- Constants ---
 const LEVELS = ['KET', 'PET', 'Junior High', 'Senior High', 'Postgraduate']
@@ -109,6 +124,7 @@ const hubContentTop = safeAreaTop + headerHeight + tabBarHeight // Matches conte
 
 // --- State Management ---
 let user = null
+let userInfoBtn = null
 let isLogin = false
 let currentScene = 'hub' // 'hub', 'wordweaver', 'game'
 let isWarmingUp = false
@@ -281,15 +297,15 @@ function buildStoryPrompt(words, level, topic) {
   
   // Level-specific adjustment
   if (level === "KET") {
-      difficulty_context = "CEFR A2 (Elementary). Use simple Subject-Verb-Object structures. Vocabulary should be high-frequency daily words."
+      difficulty_context = "CEFR A2 (Elementary). STRICT CONSTRAINT: The story must be very short, UNDER 10 SENTENCES. Use simple Subject-Verb-Object structures. Vocabulary should be high-frequency daily words."
   } else if (level === "PET") {
-      difficulty_context = "CEFR B1 (Intermediate). Introduce relative clauses and perfect tenses. Focus on clear narrative flow."
+      difficulty_context = "CEFR B1 (Intermediate). CONSTRAINT: The story must be concise, UNDER 15 SENTENCES. Introduce relative clauses and perfect tenses. Focus on clear narrative flow."
   } else if (level === "Junior High") {
-      difficulty_context = "CEFR B1+. Mix formal and informal registers appropriate for school life. Use standard textbook grammar."
+      difficulty_context = "CEFR B1+. CONSTRAINT: The story must be concise, UNDER 15 SENTENCES. Mix formal and informal registers appropriate for school life. Use standard textbook grammar."
   } else if (level === "Senior High") {
-      difficulty_context = "CEFR B2 (Upper Intermediate). Use sophisticated vocabulary, passive voice, and conditionals. Text should resemble a reputable news article or academic essay."
+      difficulty_context = "CEFR B2 (Upper Intermediate). CONSTRAINT: Use complex syntactic structures and longer sentences. Use sophisticated vocabulary, passive voice, and conditionals. Text should resemble a reputable news article or academic essay."
   } else if (level === "Postgraduate") {
-      difficulty_context = "CEFR C1/C2 (Advanced). Use nuanced expression, complex syntactic structures, and academic tone. Text should resemble The Economist or Nature."
+      difficulty_context = "CEFR C1/C2 (Advanced). CONSTRAINT: Use highly complex syntactic structures, long sentences, and nuanced expression. Academic tone. Text should resemble The Economist or Nature."
   } else {
       difficulty_context = "CEFR B1. Standard difficulty."
   }
@@ -319,9 +335,9 @@ function buildStoryPrompt(words, level, topic) {
     2. **Scenario**: ${scenario_guidance}
     3. **Word Integration**: Highlight target words in Markdown bold (**word**). They must fit grammatically and contextually.
     4. **Length**: 
-       - KET/PET: 80-120 words.
-       - Junior/Senior High: 150-200 words.
-       - Postgraduate: 200-250 words.
+       - KET: Strictly UNDER 10 sentences. Short and simple.
+       - PET/Junior High: Strictly UNDER 15 sentences. Concise.
+       - Senior High/Postgraduate: Longer, more complex text allowed (200+ words).
     
     OUTPUT REQUIREMENTS (JSON Format):
     1. **content**: The English story. Ensure proper paragraphing.
@@ -367,15 +383,17 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
         ;(async () => {
             try {
                 // 1. Get and print available models
-                let modelId = "hunyuan-lite" // Default fallback
+                let modelId = "hunyuan-turbos-latest" // Default to user preferred model
                 if (wx.cloud.extend.AI.getModels) {
                     try {
                         const models = await wx.cloud.extend.AI.getModels()
                         console.log('Available AI Models:', models)
                         // If we find a suitable model in the list, we could use it
-                        // For now, we trust the user provided "hunyuan-exp" or "hunyuan-lite"
+                        // Prioritize hunyuan-turbos-latest, then hunyuan-lite, then hunyuan-exp
                         if (models && models.length > 0) {
-                             const found = models.find(m => m.id === 'hunyuan-lite' || m.id === 'hunyuan-exp')
+                             const found = models.find(m => m.id === 'hunyuan-turbos-latest') || 
+                                           models.find(m => m.id === 'hunyuan-lite') || 
+                                           models.find(m => m.id === 'hunyuan-exp')
                              if (found) modelId = found.id
                         }
                     } catch (e) {
@@ -386,8 +404,8 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                 console.log('Using Model ID:', modelId)
 
                 // 2. Create Model Instance
-                // Use the user-suggested "hunyuan-exp" or fallback to "hunyuan"
-                const ai = wx.cloud.extend.AI.createModel("hunyuan") 
+                // Use the user-suggested "hunyuan-exp" to access newer models
+                const ai = wx.cloud.extend.AI.createModel("hunyuan-exp") 
 
                 // 3. Call streamText with new interface (Async Iterable)
                 const res = await ai.streamText({
@@ -408,7 +426,15 @@ function callApiStream(path, method, data, onChunk, onSuccess, onFail) {
                         }
                         try {
                             const data = JSON.parse(event.data)
-                            // Standard OpenAI-like format: choices[0].delta.content
+                            
+                            // Handle reasoning_content (DeepSeek style thinking)
+                            const think = data?.choices?.[0]?.delta?.reasoning_content
+                            if (think) {
+                                console.log('[AI Think]', think)
+                                // Note: We do NOT pass thinking process to onChunk as it's not valid JSON story data
+                            }
+
+                            // Handle content
                             const text = data?.choices?.[0]?.delta?.content
                             if (text) {
                                 onChunk(text)
@@ -526,7 +552,12 @@ function login() {
   const onLoginFail = (err) => {
       wx.hideLoading()
       console.warn('Cloud login failed, using Guest Mode', err)
-      user = { openid: 'guest_' + Math.random().toString(36).substr(2, 9) }
+      const guestId = 'guest_' + Math.random().toString(36).substr(2, 9)
+      if (user) {
+          user.openid = guestId
+      } else {
+          user = { openid: guestId }
+      }
       isLogin = true
       wx.setStorageSync('user', user)
       draw()
@@ -542,7 +573,11 @@ function login() {
           wx.hideLoading()
           if (res.result && res.result.openid) {
               const { openid } = res.result
-              user = { openid }
+              if (user) {
+                  user.openid = openid
+              } else {
+                  user = { openid }
+              }
               isLogin = true
               wx.setStorageSync('user', user)
               draw()
@@ -601,7 +636,10 @@ function fetchLeaderboard() {
   if (USE_CLOUD && wx.cloud) {
       wx.cloud.callFunction({
           name: 'wordweaver',
-          data: { action: 'get_leaderboard' }
+          data: { 
+              action: 'get_leaderboard',
+              data: { type: rankType } 
+          }
       }).then(res => {
           leaderboardData = (res.result && res.result.data) ? res.result.data : []
           isHubLoading = false
@@ -624,7 +662,12 @@ let isPrefetching = false
 
 function pickRandomWords(count = 5) {
   const list = vocabularyDict[selectedLevel] || vocabularyDict['Junior High'] || []
-  const shuffled = [...list].sort(() => 0.5 - Math.random())
+  // Fisher-Yates Shuffle
+  const shuffled = [...list]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   return shuffled.slice(0, count)
 }
 
@@ -869,16 +912,26 @@ function saveRecord() {
     })
   }
 
-  callApi('/record_learning', 'POST', {
-    user_name: user.openid,
-    words: wordsList,
-    source_level: selectedLevel,
-    topic: selectedTopic
-  }, () => {
-    console.log('Record saved')
-  }, (err) => {
-    console.error('Record save failed', err)
-  })
+  // Use Cloud Function
+  if (USE_CLOUD && wx.cloud) {
+      wx.cloud.callFunction({
+          name: 'wordweaver',
+          data: { 
+              action: 'record_learning',
+              data: {
+                  words: wordsList,
+                  source_level: selectedLevel,
+                  topic: selectedTopic
+              }
+          }
+      }).then(res => {
+          console.log('Record saved via Cloud Function')
+      }).catch(err => {
+          console.error('Record save failed', err)
+      })
+  } else {
+      console.log('Cloud not enabled, skipping record save')
+  }
 }
 
 function toggleAudio() {
@@ -896,8 +949,98 @@ function toggleAudio() {
 function fetchAndPlayAudio() {
   if (!storyData || !storyData.content) return
   
-  wx.showLoading({ title: '加载音频...' })
   const text = storyData.content.replace(/\*\*/g, '')
+
+  // Priority 1: Use WechatSI Plugin (Native, Free, Fast)
+  if (wechatSI) {
+      wx.showLoading({ title: '语音生成中...' })
+      // WechatSI has a limit (approx 1024 chars). Truncate if necessary.
+      const safeText = text.length > 1000 ? text.slice(0, 1000) : text
+      
+      wechatSI.textToSpeech({
+          lang: "en_US",
+          tts: true,
+          content: safeText,
+          success: function(res) {
+              wx.hideLoading()
+              console.log("TTS Success:", res.filename)
+              currentAudioSrc = res.filename
+              
+              if (!audioCtx) initAudio()
+              
+              // Ensure audio context is ready
+              audioCtx.stop()
+              audioCtx.src = currentAudioSrc
+              audioCtx.play()
+          },
+          fail: function(res) {
+              wx.hideLoading()
+              console.error("TTS Failed:", res)
+              wx.showToast({ title: '语音生成失败', icon: 'none' })
+          }
+      })
+      return
+  }
+  
+  // Plugin Missing Alert
+  if (pluginMissing) {
+      console.warn("WechatSI missing. Attempting Backend (Cloud Container) Fallback...")
+      
+      wx.showLoading({ title: '加载音频...' })
+      
+      // Use Backend API (FastAPI + Edge-TTS)
+      // Works for both Local Dev (localhost) and Cloud Hosting (Container)
+      
+      // Determine API URL based on environment
+      // If you are testing locally, keep using localhost.
+      // If you are deploying or want to test the Cloud Hosting service, uncomment the second line.
+      
+      // const apiUrl = 'http://localhost:8000/audio' 
+      // New Service: wordweaver-backend
+      const apiUrl = 'https://wordweaver-backend-prod-5glh5gz97b0f6495.cn-shanghai.run.tcloudbase.com/audio'
+      
+      console.log('Requesting TTS from:', apiUrl)
+      
+      wx.request({
+          url: apiUrl, 
+          method: 'GET',
+          data: {
+              text: text
+          },
+          responseType: 'arraybuffer',
+          success: (res) => {
+              wx.hideLoading()
+              if (res.statusCode === 200 && res.data.byteLength > 0) {
+                  const fs = wx.getFileSystemManager()
+                  const filePath = `${wx.env.USER_DATA_PATH}/tts_backend_${Date.now()}.mp3`
+                  
+                  try {
+                      fs.writeFileSync(filePath, res.data, 'binary')
+                      currentAudioSrc = filePath
+                      if (!audioCtx) initAudio()
+                      audioCtx.stop()
+                      audioCtx.src = currentAudioSrc
+                      audioCtx.play()
+                  } catch (e) {
+                      console.error('File Write Error', e)
+                      wx.showToast({ title: '写入失败', icon: 'none' })
+                  }
+              } else {
+                  console.error('Backend TTS Failed', res)
+                  wx.showToast({ title: '音频生成失败', icon: 'none' })
+              }
+          },
+          fail: (err) => {
+              wx.hideLoading()
+              console.error('Backend Request Error', err)
+              wx.showToast({ title: '连接后端失败', icon: 'none' })
+          }
+      })
+      return
+  }
+
+  // Priority 2: Fallback to Backend API (if plugin not available)
+  wx.showLoading({ title: '加载音频...' })
   
   wx.cloud.callContainer({
     config: { env: CLOUD_ENV },
@@ -937,6 +1080,12 @@ function draw() {
   activeButtons = []
   const { windowWidth, windowHeight } = wx.getSystemInfoSync()
   
+  // Cleanup UserInfoButton if not in Hub
+  if (currentScene !== 'hub' && userInfoBtn) {
+    userInfoBtn.destroy()
+    userInfoBtn = null
+  }
+
   context.fillStyle = Theme.bg
   context.fillRect(0, 0, windowWidth, windowHeight)
 
@@ -972,6 +1121,59 @@ function drawMainHub(w, h) {
     draw()
   }, Theme.primaryTxt, 22)
 
+  // UserInfoButton for getting nickname/avatar
+  if (!user || !user.userInfo) {
+      if (!userInfoBtn) {
+          userInfoBtn = wx.createUserInfoButton({
+            type: 'text',
+            text: '',
+            style: {
+              left: 30,
+              top: startY,
+              width: btnW,
+              height: btnH,
+              lineHeight: 40,
+              backgroundColor: '#00000000',
+              color: '#ffffff',
+              textAlign: 'center',
+              fontSize: 16,
+              borderRadius: 4
+            }
+          })
+          
+          userInfoBtn.onTap((res) => {
+              if (res.userInfo) {
+                  // User authorized
+                  if (user) {
+                      user.userInfo = res.userInfo
+                  } else {
+                      user = { userInfo: res.userInfo }
+                  }
+                  wx.setStorageSync('user', user)
+              }
+              
+              // Proceed regardless of auth result
+              if (!isLogin) {
+                  login()
+              }
+              currentScene = 'wordweaver'
+              hubTab = 'SELECTION'
+              draw()
+          })
+      } else {
+          // Update position in case of resize (though usually fixed)
+          userInfoBtn.style.left = 30
+          userInfoBtn.style.top = startY
+          userInfoBtn.style.width = btnW
+          userInfoBtn.style.height = btnH
+      }
+  } else {
+      if (userInfoBtn) {
+          userInfoBtn.destroy()
+          userInfoBtn = null
+      }
+  }
+
   drawButton(30, startY + 110, btnW, btnH, Theme.secondary, 'MathMind', '敬请期待', false, null, Theme.secondaryTxt, 22)
 }
 
@@ -989,10 +1191,10 @@ function drawWordWeaverHub(w, h) {
     
     // Back Button
     const backBtnH = 36
-    drawButton(10, headerY + (headerHeight - backBtnH)/2, 80, backBtnH, 'transparent', '< 主页', '', true, () => {
+    drawButton(10, headerY + (headerHeight - backBtnH)/2, 60, backBtnH, 'transparent', '<', '', true, () => {
         currentScene = 'hub'
         draw()
-    }, Theme.primary, 16, true, null, Theme.primary) // Ghost button style
+    }, Theme.primary, 24, true, null, Theme.primary) // Ghost button style
 
     context.fillStyle = Theme.textMain
     context.font = 'bold 18px sans-serif'
@@ -1174,29 +1376,35 @@ function drawHistoryCard(w) {
     if (historyData.length === 0) {
         context.fillStyle = Theme.textSub
         context.textAlign = 'center'
-        context.fillText('暂无历史记录', w/2, y + 50)
+        context.fillText('暂无学习记录', w/2, y + 50)
         return y + 100
     }
     
-    historyData.forEach(item => {
-        // Draw individual cards for history items
-        drawCard(20, y, w - 40, 80)
+    // Draw list of learned words
+    historyData.forEach((item, index) => {
+        // item: { word: 'apple', meaning: '苹果', date: '...' }
+        drawCard(20, y, w - 40, 70)
         
         context.fillStyle = Theme.textMain
-        context.font = 'bold 16px sans-serif'
+        context.font = 'bold 18px sans-serif'
         context.textAlign = 'left'
-        context.fillText(item.topic, 40, y + 30) // Adjusted x for card padding
+        context.fillText(item.word, 40, y + 30) 
         
         context.fillStyle = Theme.textSub
-        context.font = '14px sans-serif'
-        context.fillText(item.level, 40, y + 55)
-        
-        context.fillStyle = Theme.accent
-        context.font = 'bold 20px sans-serif'
+        context.font = '16px sans-serif'
         context.textAlign = 'right'
-        context.fillText(`+${item.score}`, w - 40, y + 45)
+        context.fillText(item.meaning, w - 40, y + 30)
+
+        // Date (optional)
+        if (item.date) {
+            context.fillStyle = Theme.textLight
+            context.font = '12px sans-serif'
+            context.textAlign = 'left'
+            const dateStr = new Date(item.date).toLocaleDateString()
+            context.fillText(dateStr, 40, y + 55)
+        }
         
-        y += 95
+        y += 85
     })
     return y + 20
 }
@@ -1216,8 +1424,10 @@ function drawLeaderboardCard(w) {
         const btnTxt = isSel ? Theme.primaryTxt : Theme.secondaryTxt
         
         drawButton(tx, y, subTabW, 40, btnBg, typeLabels[t], '', true, () => {
-            rankType = t
-            fetchLeaderboard() 
+            if (rankType !== t) {
+                rankType = t
+                fetchLeaderboard()
+            }
         }, btnTxt, 14, false, hubContentTop + scrollOffset + y)
     })
     y += 60
@@ -1592,12 +1802,19 @@ function drawQuizTab(w) {
   const textW = cardW - (innerPadding * 2)
   
   // Calculate Heights
-  const qLines = wrapText(context, q.question, textW, 20) 
+  const qLines = wrapText(context, q.question, textW, 20, 'bold') 
   const qTextHeight = qLines.length * 32 // 20px font, 32px line height
   
-  const optionBtnH = 56
   const optionGap = 16
-  const optionsHeight = q.options.length * (optionBtnH + optionGap)
+  const optionHeights = q.options.map(opt => {
+      // Estimate height: bold 16px
+      const lines = wrapText(context, opt, textW - 20, 16, 'bold') // -20 padding in drawButton
+      const lineHeight = 16 * 1.3
+      const neededH = lines.length * lineHeight + 24 // +24 vertical padding
+      return Math.max(56, neededH)
+  })
+  
+  const optionsHeight = optionHeights.reduce((a, b) => a + b, 0) + (Math.max(0, q.options.length - 1)) * optionGap
   
   const actionBtnH = 50
   const actionSectionH = actionBtnH + 10 // +10 margin top
@@ -1630,7 +1847,7 @@ function drawQuizTab(w) {
   innerY += 30 // Gap before options
   
   // Options
-  q.options.forEach(opt => {
+  q.options.forEach((opt, index) => {
     let bgColor = Theme.secondary 
     let txtColor = Theme.secondaryTxt
     let borderColor = null
@@ -1647,9 +1864,10 @@ function drawQuizTab(w) {
       }
     }
     
-    drawButton(startX, innerY, textW, optionBtnH, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, contentTop + scrollOffset + innerY, borderColor)
+    const h = optionHeights[index]
+    drawButton(startX, innerY, textW, h, bgColor, opt, '', true, () => handleAnswer(opt), txtColor, 16, false, contentTop + scrollOffset + innerY, borderColor)
     
-    innerY += (optionBtnH + optionGap)
+    innerY += (h + optionGap)
   })
   
   innerY += 14 // Extra gap before action buttons
@@ -1659,14 +1877,14 @@ function drawQuizTab(w) {
   
   // Skip Button (Ghost Style)
   if (!isLast) {
-      const skipW = 80
-      drawButton(startX, innerY, skipW, actionBtnH, 'transparent', '跳过', '', true, () => {
+      const skipW = 60
+      drawButton(startX, innerY, skipW, actionBtnH, 'transparent', '>>', '', true, () => {
           skipQuestion()
-      }, Theme.textLight, 16, false, contentTop + scrollOffset + innerY)
+      }, Theme.textLight, 24, false, contentTop + scrollOffset + innerY)
   }
   
   const nextLabel = isLast ? '完成测试' : '下一题'
-  const nextBtnW = isLast ? textW : (textW - 100) 
+  const nextBtnW = isLast ? textW : (textW - 80) 
   
   const nextX = isLast ? startX : (startX + textW - nextBtnW)
   
@@ -1741,7 +1959,26 @@ function drawButton(x, y, w, h, bg, text, subtext, interactive, callback, textCo
     context.font = '12px sans-serif'
     context.fillText(subtext, x + w / 2, y + h / 2 + 11)
   } else {
-    context.fillText(text, x + w / 2, y + h / 2)
+    // Check for multiline
+    const maxW = w - 20
+    const lines = wrapText(context, text, maxW, fontSize, 'bold')
+    
+    if (lines.length > 1) {
+        const lineHeight = fontSize * 1.3
+        const totalH = lines.length * lineHeight
+        // Start Y is top of text block. 
+        // fillText draws at baseline (middle). 
+        // Let's calculate center of block.
+        // First line center Y = (y + h/2) - (totalH/2) + (lineHeight/2)
+        let lineY = y + (h - totalH) / 2 + lineHeight / 2
+        
+        lines.forEach(line => {
+            context.fillText(line, x + w / 2, lineY)
+            lineY += lineHeight
+        })
+    } else {
+        context.fillText(text, x + w / 2, y + h / 2)
+    }
   }
   
   if (interactive) {
@@ -1767,8 +2004,8 @@ function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   if (stroke) ctx.stroke()
 }
 
-function wrapText(context, text, maxWidth, fontSize) {
-  context.font = `${fontSize}px sans-serif`
+function wrapText(context, text, maxWidth, fontSize, fontWeight = '') {
+  context.font = `${fontWeight} ${fontSize}px sans-serif`.trim()
   const lines = []
   const paragraphs = text.split('\n')
   

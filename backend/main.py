@@ -88,6 +88,29 @@ def read_root():
     logger.info("Health check endpoint called")
     return {"message": "WordWeaver Backend is running", "version": "1.0.8"}
 
+@app.get("/audio")
+async def text_to_speech(text: str = Query(..., max_length=1000), voice: str = "en-US-ChristopherNeural"):
+    """
+    Generate TTS audio using edge-tts (Microsoft Edge TTS).
+    Returns binary audio data directly.
+    """
+    logger.info(f"Generating audio for text: {text[:50]}...")
+    
+    try:
+        communicate = edge_tts.Communicate(text, voice)
+        
+        # Generator to stream audio chunks
+        async def audio_generator():
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+                    
+        return StreamingResponse(audio_generator(), media_type="audio/mpeg")
+    
+    except Exception as e:
+        logger.error(f"TTS Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/login")
 async def login(
     request: LoginRequest, 

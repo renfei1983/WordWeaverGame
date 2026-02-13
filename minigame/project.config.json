@@ -15,15 +15,29 @@
     "showShadowRootInWxmlPanel": true,
     "scopeDataCheck": false,
     "uglifyFileName": false,
-    "checkInvalidSitemap": true
+    "checkInvalidSitemap": true,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
   },
   "compileType": "game",
-  "libVersion": "2.19.4",
+  "libVersion": "3.7.1",
   "appid": "wx13922e8b755b1ece",
   "projectname": "WordWeaverHub",
-  "debugOptions": {
-    "hidedInDevtools": []
-  },
   "isGameTourist": false,
   "simulatorType": "wechat",
   "simulatorPluginLibVersion": {},
@@ -32,5 +46,10 @@
       "current": -1,
       "list": []
     }
-  }
+  },
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {}
 }

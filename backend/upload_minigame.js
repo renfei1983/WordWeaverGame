@@ -27,20 +27,18 @@ const fs = require('fs')
   try {
     const uploadResult = await ci.upload({
     project,
-    version: '1.9.0',
-    desc: 'Deployed via Trae IDE - 2026 AI Standard Update (v1.9.0)',
+    version: '1.10.1',
+    desc: 'Deployed via Trae IDE - 2026 AI Standard Update (v1.10.1) - Fix Record Save Error',
     setting: {
-      es6: true
-    }
+      es6: true,
+      minify: true,
+      autoPrefixWXSS: true,
+      minifyWXML: true,
+      minifyWXSS: true,
+      minifyJS: true
+    },
+    onProgressUpdate: console.log,
   })
-        minify: true,
-        autoPrefixWXSS: true,
-        minifyWXML: true,
-        minifyWXSS: true,
-        minifyJS: true
-        },
-        onProgressUpdate: console.log,
-    })
     console.log('Upload Result:', uploadResult)
   } catch (err) {
       console.error('Upload Failed:', err)
